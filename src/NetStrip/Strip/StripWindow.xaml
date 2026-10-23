@@ -17,7 +17,7 @@
         SourceInitialized="OnSourceInitialized"
         Closed="OnClosed">
     <Border x:Name="Root"
-            Background="Transparent"
+            Background="#01000000"
             ToolTipService.InitialShowDelay="600"
             ToolTipService.ShowDuration="8000"
             MouseLeftButtonDown="OnMouseLeftButtonDown"

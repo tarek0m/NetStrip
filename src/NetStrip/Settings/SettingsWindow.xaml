@@ -20,7 +20,9 @@
         <Style x:Key="RowLabel" TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
-        <Style TargetType="ComboBox">
+        <!-- BasedOn keeps the Fluent template: with Application.ThemeMode the Fluent styles are ordinary implicit
+             styles, so a bare TargetType style would replace them with the classic (white popup) one. -->
+        <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
             <Setter Property="MinWidth" Value="180" />
             <Setter Property="HorizontalAlignment" Value="Right" />
         </Style>
