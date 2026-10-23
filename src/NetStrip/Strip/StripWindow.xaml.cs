@@ -224,7 +224,9 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         if (fade != _faded)
         {
             _faded = fade;
-            Root.BeginAnimation(OpacityProperty, new DoubleAnimation
+            // Fade the text, not Root: Root's alpha-1 background would round to fully transparent at 0.45 opacity,
+            // and a layered window passes clicks on fully transparent pixels through to the taskbar.
+            Inner.BeginAnimation(OpacityProperty, new DoubleAnimation
             {
                 To = fade ? 0.45 : 1.0,
                 Duration = TimeSpan.FromMilliseconds(fade ? 200 : 120),
