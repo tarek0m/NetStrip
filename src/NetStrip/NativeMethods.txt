@@ -11,3 +11,7 @@ DwmExtendFrameIntoClientArea
 DWMWINDOWATTRIBUTE
 MARGINS
 AllowSetForegroundWindow
+GetWindowRect
+GetWindow
+GetClassName
+IsWindowVisible
