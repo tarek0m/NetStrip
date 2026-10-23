@@ -38,6 +38,9 @@ internal sealed class AppHost : IDisposable
     // Ticks hourly; UpdateChecker itself allows at most one request per 24 h, so drift or sleep never skips a day.
     private static readonly TimeSpan UpdateTimerInterval = TimeSpan.FromHours(1);
     private static readonly TimeSpan FlyoutReopenGuard = TimeSpan.FromMilliseconds(250);
+    // Working-set trims: once startup has settled (attach retries included), and after transient windows close.
+    private static readonly TimeSpan StartupTrimDelay = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan IdleTrimDelay = TimeSpan.FromSeconds(10);
     private static readonly Lazy<HttpClient> SharedHttp = new(() => new HttpClient());
 
     private readonly App _app;
@@ -60,6 +63,7 @@ internal sealed class AppHost : IDisposable
     private TaskbarHost _host = null!;
     private DispatcherTimer? _saveTimer;
     private DispatcherTimer? _updateTimer;
+    private DispatcherTimer? _trimTimer;
     private UpdateChecker? _updates;
 
     private FlyoutWindow? _flyout;
@@ -150,6 +154,10 @@ internal sealed class AppHost : IDisposable
         _updateTimer = new DispatcherTimer(DispatcherPriority.Background, _dispatcher) { Interval = UpdateTimerInterval };
         _updateTimer.Tick += (_, _) => CheckForUpdates();
         _updateTimer.Start();
+
+        _trimTimer = new DispatcherTimer(DispatcherPriority.ApplicationIdle, _dispatcher);
+        _trimTimer.Tick += (_, _) => TrimWorkingSet();
+        ScheduleTrim(StartupTrimDelay);
 
         _host.Start();
 
@@ -358,7 +366,9 @@ internal sealed class AppHost : IDisposable
 
     private void OnFlyoutVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
-        if (e.NewValue is false) _flyoutHiddenAt = Stopwatch.GetTimestamp();
+        if (e.NewValue is not false) return;
+        _flyoutHiddenAt = Stopwatch.GetTimestamp();
+        ScheduleTrim(IdleTrimDelay);
     }
 
     private void ToggleFlyout(StripWindow clicked)
@@ -422,7 +432,11 @@ internal sealed class AppHost : IDisposable
             return;
         }
         _settingsWindow = new SettingsWindow(_settings, _source.Adapters);
-        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+        _settingsWindow.Closed += (_, _) =>
+        {
+            _settingsWindow = null;
+            ScheduleTrim(IdleTrimDelay);
+        };
         _settingsWindow.Show();
         _settingsWindow.Activate();
     }
@@ -469,6 +483,32 @@ internal sealed class AppHost : IDisposable
         }
     }
 
+    // ---- Memory -------------------------------------------------------------------------------------------
+
+    /// <summary>(Re)starts the one-shot trim timer; a later request replaces an earlier one.</summary>
+    private void ScheduleTrim(TimeSpan delay)
+    {
+        if (_trimTimer is null || _disposed) return;
+        _trimTimer.Stop();
+        _trimTimer.Interval = delay;
+        _trimTimer.Start();
+    }
+
+    private void TrimWorkingSet()
+    {
+        _trimTimer?.Stop();
+        // An open window is in use; closing it schedules the next trim.
+        if (_disposed || _flyout is { IsOpen: true } || _settingsWindow is not null) return;
+        try
+        {
+            if (!WorkingSet.Trim()) _log.Warn("Trimming the working set failed");
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("Trimming the working set failed", ex);
+        }
+    }
+
     /// <summary>Writes usage.json if anything changed. Safe to call at any time, including during shutdown.</summary>
     public void SaveUsage()
     {
@@ -492,6 +532,7 @@ internal sealed class AppHost : IDisposable
 
         _saveTimer?.Stop();
         _updateTimer?.Stop();
+        _trimTimer?.Stop();
         _cts.Cancel();
 
         if (_source is not null) _source.SampleProduced -= OnSampleProduced;

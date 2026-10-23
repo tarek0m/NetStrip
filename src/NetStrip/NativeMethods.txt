@@ -11,3 +11,5 @@ DwmExtendFrameIntoClientArea
 DWMWINDOWATTRIBUTE
 MARGINS
 AllowSetForegroundWindow
+GetCurrentProcess
+SetProcessWorkingSetSizeEx
