@@ -5,7 +5,8 @@ using System.Text.Json.Serialization;
 namespace NetStrip.Core;
 
 public enum AdapterKind { Ethernet, WiFi, Cellular, Other }
-public sealed record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);
+/// <param name="Connected">Link is up (operationally up and media connected). A disconnected adapter has no IPv4.</param>
+public sealed record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4, bool Connected = true);
 public sealed record Sample(DateTimeOffset Time, string AdapterId, long UpBytesPerSec, long DownBytesPerSec);
 public static class AdapterIds { public const string All = "all"; public const string Auto = "auto"; }
 
@@ -53,8 +54,9 @@ public interface IUsageQuery
 }
 
 // Raw counters for one adapter at one instant (Shell implements, Core consumes)
+/// <param name="Connected">Link is up right now (read every tick, unlike the cached name and IPv4).</param>
 public sealed record InterfaceCounters(string Id, string Name, AdapterKind Kind, string? IPv4,
-    ulong InOctets, ulong OutOctets, bool Included);
+    ulong InOctets, ulong OutOctets, bool Included, bool Connected = true);
 
 public interface IInterfaceTable
 {

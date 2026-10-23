@@ -115,7 +115,7 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
 - WPF window, Fluent theme, Mica backdrop (Win11) / solid themed background (Win10), 320 px wide, 8 px corner radius, anchored above (or beside, for side taskbars) the strip, clamped to the monitor work area.
 - Closes on deactivation or Esc.
 - Sections:
-  1. **Header:** adapter kind icon, adapter name, IPv4 address (or "Disconnected"). With the adapter setting on "All adapters": a network icon, "All adapters" and "N connected" (adapters with a non-link-local IPv4 address), or "None connected".
+  1. **Header:** adapter kind icon, adapter name, IPv4 address (or "Disconnected"). An adapter whose link is down (operational status not up, or media disconnected, read every tick) shows a disconnected icon, its name and "Disconnected", never a stale address. With the adapter setting on "All adapters": a network icon, "All adapters" and "N connected" (adapters with a non-link-local IPv4 address), or "None connected".
   2. **Graph:** last 60 samples; download as filled area (accent, 30 % fill), upload as 1.5 px line (teal); y-axis auto-scales to the max in window with a single max label. Custom-drawn `Polyline`/`Path`, no chart library.
   3. **Live:** current ↑ / ↓ in larger type.
   4. **Totals:** Today ↓/↑ and This cycle ↓/↑ (the data-cap cycle, starting on the "Cycle resets on day" setting); cap progress bar + "x of y GB" when a cap is set (bar turns warning color ≥ 80 %, critical ≥ 100 %).

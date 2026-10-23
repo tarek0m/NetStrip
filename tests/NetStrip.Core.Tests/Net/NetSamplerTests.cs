@@ -192,6 +192,48 @@ public class NetSamplerTests
     }
 
     [Fact]
+    public void AdapterDisconnecting_IsReported_WithoutItsOldAddress()
+    {
+        _table.Set("w", 0, 0, kind: AdapterKind.WiFi, ipv4: "192.168.1.112");
+        _table.BestId = "w";
+        var sampler = Create();
+        sampler.Tick();
+        Assert.Equal(new AdapterInfo("w", "Adapter w", AdapterKind.WiFi, "192.168.1.112", Connected: true), sampler.CurrentAdapter);
+
+        // Wi-Fi drops: the table still lists the adapter (and, until refreshed, may still carry the old address).
+        _table.Set("w", 0, 0, kind: AdapterKind.WiFi, ipv4: "192.168.1.112", connected: false);
+        _clock.Advance(TimeSpan.FromSeconds(1));
+        sampler.Tick();
+
+        var adapter = Assert.Single(sampler.Adapters);
+        Assert.False(adapter.Connected);
+        Assert.Null(adapter.IPv4);
+
+        _table.Set("w", 0, 0, kind: AdapterKind.WiFi, ipv4: "192.168.1.113");
+        _clock.Advance(TimeSpan.FromSeconds(1));
+        sampler.Tick();
+        Assert.Equal(new AdapterInfo("w", "Adapter w", AdapterKind.WiFi, "192.168.1.113", Connected: true), Assert.Single(sampler.Adapters));
+    }
+
+    [Fact]
+    public void AdapterChange_ReevaluatesBestRouteOnTheNextTick()
+    {
+        _table.Set("a", 0, 0);
+        _table.Set("b", 0, 0);
+        _table.BestId = "a";
+        var sampler = Create();
+        Assert.Equal("a", sampler.Tick().AdapterId);
+
+        // "a" disconnects and the route moves to "b": no waiting for the 10-tick re-evaluation.
+        _table.Set("a", 0, 0, connected: false);
+        _table.BestId = "b";
+        _clock.Advance(TimeSpan.FromSeconds(1));
+        sampler.Tick();                                  // sees the change
+        _clock.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal("b", sampler.Tick().AdapterId);     // re-evaluated
+    }
+
+    [Fact]
     public void All_SumsIncludedOnly()
     {
         _table.Set("a", 0, 0);

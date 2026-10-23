@@ -246,6 +246,14 @@ public partial class FlyoutWindow : Window
             detail = "";
             accessible = name;
         }
+        else if (!adapter.Connected)
+        {
+            // The chosen adapter is still there but its link is down (Wi-Fi dropped, cable out).
+            glyph = "\uE871";
+            name = adapter.Name;
+            detail = "Disconnected";
+            accessible = $"{adapter.Kind} connection, {name}, disconnected";
+        }
         else
         {
             glyph = adapter.Kind switch
@@ -267,9 +275,9 @@ public partial class FlyoutWindow : Window
         AutomationProperties.SetName(HeaderPanel, accessible);
     }
 
-    /// <summary>Has a usable IPv4 address: not a self-assigned 169.254.x.x one (link-local, no network).</summary>
+    /// <summary>Link up with a usable IPv4 address: not a self-assigned 169.254.x.x one (link-local, no network).</summary>
     private static bool IsConnected(AdapterInfo a) =>
-        a.IPv4 is { Length: > 0 } ip && !ip.StartsWith("169.254.", StringComparison.Ordinal);
+        a.Connected && a.IPv4 is { Length: > 0 } ip && !ip.StartsWith("169.254.", StringComparison.Ordinal);
 
     private void UpdateCap()
     {

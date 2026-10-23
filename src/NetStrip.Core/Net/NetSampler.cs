@@ -26,6 +26,7 @@ public sealed class NetSampler(IInterfaceTable table, IClock clock, ILog log) : 
     private string? _bestId;
     private int _ticksSinceBestLookup = AutoReevaluateTicks;
     private bool _hasPreviousTick;
+    private bool _adaptersBuilt;
     private long _previousTicks;
     private int _generation;
 
@@ -191,13 +192,18 @@ public sealed class NetSampler(IInterfaceTable table, IClock clock, ILog log) : 
         for (var i = 0; i < counters.Count; i++)
         {
             var c = counters[i];
-            if (c.Included) rebuilt.Add(new AdapterInfo(c.Id, c.Name, c.Kind, c.IPv4));
+            if (c.Included) rebuilt.Add(new AdapterInfo(c.Id, c.Name, c.Kind, c.Connected ? c.IPv4 : null, c.Connected));
         }
+        // After the first build, a change means an adapter connected, disconnected or changed address: the best route
+        // may have moved, so don't wait for the periodic re-evaluation.
+        if (_adaptersBuilt) _forceBestLookup = true;
+        _adaptersBuilt = true;
         _adapters = rebuilt;
     }
 
     private static bool Matches(AdapterInfo a, InterfaceCounters c) =>
-        a.Id == c.Id && a.Name == c.Name && a.Kind == c.Kind && a.IPv4 == c.IPv4;
+        a.Id == c.Id && a.Name == c.Name && a.Kind == c.Kind && a.Connected == c.Connected
+        && a.IPv4 == (c.Connected ? c.IPv4 : null);
 
     private AdapterInfo? FindAdapter(string id)
     {

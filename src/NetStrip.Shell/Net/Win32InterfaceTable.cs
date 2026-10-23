@@ -3,6 +3,7 @@ using NetStrip.Core;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.NetworkManagement.IpHelper;
+using Windows.Win32.NetworkManagement.Ndis;
 using Windows.Win32.Networking.WinSock;
 
 namespace NetStrip.Shell.Net;
@@ -24,7 +25,8 @@ public sealed unsafe class Win32InterfaceTable : IInterfaceTable, IDisposable
     private const uint ErrorBufferOverflow = 111;
     private const int PollRefreshReads = 30;
 
-    private sealed record Meta(string Id, string Name, AdapterKind Kind, string? IPv4, bool Included);
+    // Connected is the link state when the metadata was built; a different live state means IPv4 is stale.
+    private sealed record Meta(string Id, string Name, AdapterKind Kind, string? IPv4, bool Included, bool Connected);
 
     private readonly ILog _log;
     private readonly object _gate = new();
@@ -89,14 +91,14 @@ public sealed unsafe class Win32InterfaceTable : IInterfaceTable, IDisposable
 
                 if (!_notifyRegistered && ++_readsSinceRefresh >= PollRefreshReads)
                     Interlocked.Exchange(ref _dirty, 1);
-                if (Interlocked.Exchange(ref _dirty, 0) == 1 || HasUnknownInterface(rows))
+                if (Interlocked.Exchange(ref _dirty, 0) == 1 || HasUnknownInterface(rows) || HasLinkChange(rows))
                     RefreshMetadata(rows);
 
                 foreach (ref readonly var row in rows)
                 {
                     if (_metaByLuid.TryGetValue(row.InterfaceLuid.Value, out var meta) && meta.Included)
                         _result.Add(new InterfaceCounters(meta.Id, meta.Name, meta.Kind, meta.IPv4,
-                            row.InOctets, row.OutOctets, true));
+                            row.InOctets, row.OutOctets, true, IsConnected(in row)));
                 }
             }
             finally
@@ -142,6 +144,22 @@ public sealed unsafe class Win32InterfaceTable : IInterfaceTable, IDisposable
     private void OnInterfaceChanged(void* callerContext, MIB_IPINTERFACE_ROW* row, MIB_NOTIFICATION_TYPE notificationType)
         => Interlocked.Exchange(ref _dirty, 1);
 
+    /// <summary>
+    /// An included adapter connected or disconnected since the metadata was built. NotifyIpInterfaceChange does not
+    /// reliably fire for that (a Wi-Fi drop mostly removes an address), so without this the old IPv4 would stay.
+    /// </summary>
+    private bool HasLinkChange(Span<MIB_IF_ROW2> rows)
+    {
+        foreach (ref readonly var row in rows)
+            if (_metaByLuid.TryGetValue(row.InterfaceLuid.Value, out var meta) && meta.Included && meta.Connected != IsConnected(in row))
+                return true;
+        return false;
+    }
+
+    private static bool IsConnected(in MIB_IF_ROW2 row) =>
+        row.OperStatus == IF_OPER_STATUS.IfOperStatusUp
+        && row.MediaConnectState == NET_IF_MEDIA_CONNECT_STATE.MediaConnectStateConnected;
+
     private bool HasUnknownInterface(Span<MIB_IF_ROW2> rows)
     {
         foreach (ref readonly var row in rows)
@@ -161,7 +179,7 @@ public sealed unsafe class Win32InterfaceTable : IInterfaceTable, IDisposable
             var id = row.InterfaceGuid.ToString("D");
             _ipv4ByIndex.TryGetValue(row.InterfaceIndex, out var ipv4);
             _metaByLuid[row.InterfaceLuid.Value] = new Meta(
-                id, row.Alias.ToString(), KindOf(row.Type), ipv4, IsIncluded(in row));
+                id, row.Alias.ToString(), KindOf(row.Type), ipv4, IsIncluded(in row), IsConnected(in row));
             _idByIndex[row.InterfaceIndex] = id;
         }
     }
