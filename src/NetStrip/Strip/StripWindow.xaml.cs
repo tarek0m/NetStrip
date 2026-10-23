@@ -24,6 +24,9 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
     private const double CompactPaddingDip = 4;
     private const double CapsulePaddingXDip = 14;
     private const double CapsulePaddingYDip = 6;
+    private const double ArrowGapDip = 6;               // the arrows' right margin in StripWindow.xaml
+    private const double RoundingSlackDip = 1;          // layout rounding can take a fraction of a pixel per element
+    private const string WidestSpeed = "999.9 MB/s";
 
     // A layered window passes clicks on fully transparent pixels through to the window behind it (the taskbar), so
     // "Transparent" would leave only the glyphs clickable. Alpha 1/255 is invisible but catches clicks everywhere.
@@ -37,6 +40,8 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
     private bool _hidden;
     private bool _placed;
     private bool _layoutLogPending;
+    private (int Width, int Height) _sizePx;
+    private double _fittedDpiScale;
     private bool _faded;
     private bool _stylesApplied;
     private bool _closed;
@@ -91,13 +96,19 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
                 MeasureText("↓999 ↑999 MB/s", CompactFontSizeDip, out var compactWidth);
                 return (Px(compactWidth + CompactPaddingDip, dpiScale), taskbarThickness);
             case StripMode.Floating:
-                MeasureText("↓ 999.9 MB/s", BaseFontSizeDip, out var capsuleWidth);
-                return (Px(capsuleWidth + HorizontalPaddingDip + 2 * CapsulePaddingXDip, dpiScale),
+                return (Px(FullContentWidth() + HorizontalPaddingDip + 2 * CapsulePaddingXDip, dpiScale),
                         Px(2 * lineHeight + 2 * CapsulePaddingYDip, dpiScale));
             default:
-                MeasureText("↓ 999.9 MB/s", BaseFontSizeDip, out var fullWidth);
-                return (Px(fullWidth + HorizontalPaddingDip, dpiScale), taskbarThickness);
+                return (Px(FullContentWidth() + HorizontalPaddingDip, dpiScale), taskbarThickness);
         }
+    }
+
+    /// <summary>Mirrors FullLayout: arrow column (glyph + gap), then the widest speed text.</summary>
+    private double FullContentWidth()
+    {
+        MeasureText("↓", BaseFontSizeDip, out var arrow);
+        MeasureText(WidestSpeed, BaseFontSizeDip, out var speed);
+        return arrow + ArrowGapDip + speed + RoundingSlackDip;
     }
 
     public void Apply(StripPlacement placement)
@@ -135,6 +146,9 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
                      $"taskbar DPI scale {placement.DpiScale:0.###}, WPF DPI scale {VisualTreeHelper.GetDpi(this).DpiScaleX:0.###}");
         _layoutLogPending = true;
 
+        _sizePx = (b.Width, b.Height);
+        FitContentToWindow();
+
         _placed = true;
         if (!_hidden && !IsVisible) base.Show();
     }
@@ -168,6 +182,9 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
 
     public void Show(Sample s, Totals today, SpeedUnits units, bool idleFadeEnabled)
     {
+        // Moving to a taskbar on another monitor can change the window's DPI after placement.
+        if (VisualTreeHelper.GetDpi(this).DpiScaleX != _fittedDpiScale) FitContentToWindow();
+
         var changes = _vm.Update(s, today, units);
 
         if ((changes & StripViewModel.Changes.Up) != 0) UpValue.Text = _vm.UpText;
@@ -201,6 +218,26 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
                 FillBehavior = FillBehavior.HoldEnd,
             });
         }
+    }
+
+    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+    {
+        base.OnDpiChanged(oldDpi, newDpi);
+        FitContentToWindow();
+    }
+
+    /// <summary>
+    /// WPF's Window keeps laying out at least the system minimum window width (166 px at 125 %) even after the HWND is
+    /// made narrower, so right-aligned text landed outside the visible area. Size the content to the real HWND, in
+    /// this window's DIPs, so everything inside it is visible at any resolution and scale.
+    /// </summary>
+    private void FitContentToWindow()
+    {
+        if (_sizePx.Width <= 0) return;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        _fittedDpiScale = dpi.DpiScaleX;
+        Root.Width = _sizePx.Width / dpi.DpiScaleX;
+        Root.Height = _sizePx.Height / dpi.DpiScaleY;
     }
 
     // ---- Mode & theme -------------------------------------------------------------------------
@@ -336,7 +373,7 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
             MeasureText(DownValue.Text, DownValue.FontSize, out var downNeeds);
             var line = new System.Text.StringBuilder()
                 .Append($"Strip layout: window {own.right - own.left}x{own.bottom - own.top} px at screen ({own.left}, {own.top}), ")
-                .Append($"WPF {ActualWidth:0.#}x{ActualHeight:0.#} DIP; ")
+                .Append($"WPF {ActualWidth:0.#}x{ActualHeight:0.#} DIP, content {Root.ActualWidth:0.#}x{Root.ActualHeight:0.#} DIP; ")
                 .Append($"up '{UpValue.Text}' needs {upNeeds:0.#} DIP, has {UpValue.ActualWidth:0.#}; ")
                 .Append($"down '{DownValue.Text}' needs {downNeeds:0.#} DIP, has {DownValue.ActualWidth:0.#}; ")
                 .Append($"font '{UpValue.FontFamily}' {UpValue.FontSize:0.#}");
