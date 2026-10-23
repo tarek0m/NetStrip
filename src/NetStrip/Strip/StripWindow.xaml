@@ -29,7 +29,7 @@
         <Border.ContextMenu>
             <ContextMenu>
                 <MenuItem x:Name="SettingsItem" Header="Settings" AutomationProperties.Name="Settings" Click="OnSettingsClick" />
-                <MenuItem x:Name="PauseItem" Header="Pause updates" IsCheckable="True" AutomationProperties.Name="Pause updates" Click="OnPauseClick" />
+                <MenuItem x:Name="PauseItem" Header="Pause speed display" IsCheckable="True" AutomationProperties.Name="Pause speed display" Click="OnPauseClick" />
                 <Separator />
                 <MenuItem x:Name="ExitItem" Header="Exit" AutomationProperties.Name="Exit" Click="OnExitClick" />
             </ContextMenu>

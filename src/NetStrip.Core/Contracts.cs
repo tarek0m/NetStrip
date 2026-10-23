@@ -88,7 +88,6 @@ public interface ISampleSource
     event Action<Sample>? SampleProduced;
     AdapterInfo? CurrentAdapter { get; }
     IReadOnlyList<AdapterInfo> Adapters { get; }
-    bool Paused { get; set; }
 }
 
 /// <summary>

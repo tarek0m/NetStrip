@@ -30,14 +30,13 @@ public class FakeSampleSourceTests
     }
 
     [Fact]
-    public void Tick_RaisesSample_UnlessPaused()
+    public void Tick_RaisesSampleEveryTime()
     {
         using var src = new FakeSampleSource();
         var n = 0;
         src.SampleProduced += _ => n++;
         src.Tick();
-        src.Paused = true;
         src.Tick();
-        Assert.Equal(1, n);
+        Assert.Equal(2, n);
     }
 }

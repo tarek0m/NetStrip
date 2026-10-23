@@ -19,7 +19,6 @@ public sealed class NetSampler(IInterfaceTable table, IClock clock, ILog log) : 
 
     private string _adapterSetting = AdapterIds.Auto;
     private volatile bool _forceBestLookup = true;
-    private volatile bool _paused;
     private volatile IReadOnlyList<AdapterInfo> _adapters = Array.Empty<AdapterInfo>();
     private volatile AdapterInfo? _currentAdapter;
 
@@ -45,8 +44,6 @@ public sealed class NetSampler(IInterfaceTable table, IClock clock, ILog log) : 
             _forceBestLookup = true;
         }
     }
-
-    public bool Paused { get => _paused; set => _paused = value; }
 
     public AdapterInfo? CurrentAdapter => _currentAdapter;
 
@@ -103,11 +100,11 @@ public sealed class NetSampler(IInterfaceTable table, IClock clock, ILog log) : 
             measurable ? (long)Math.Round(down / seconds) : 0);
     }
 
-    /// <summary>One timer step: <see cref="Tick"/>, then raise <see cref="SampleProduced"/> unless paused.</summary>
+    /// <summary>One timer step: <see cref="Tick"/>, then raise <see cref="SampleProduced"/>.</summary>
     public Sample TickAndPublish()
     {
         var sample = Tick();
-        if (!_paused) SampleProduced?.Invoke(sample);
+        SampleProduced?.Invoke(sample);
         return sample;
     }
 

@@ -83,7 +83,7 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
     /// </summary>
     public PixelPoint? FloatingPosition { get; set; }
 
-    /// <summary>Keeps the "Pause updates" menu check in sync when pausing happens elsewhere (another strip, a new window).</summary>
+    /// <summary>Keeps the "Pause speed display" menu check in sync when pausing happens elsewhere (another strip, a new window).</summary>
     public void SetPaused(bool paused) => PauseItem.IsChecked = paused;
 
     // ---- IStripSurface ------------------------------------------------------------------------

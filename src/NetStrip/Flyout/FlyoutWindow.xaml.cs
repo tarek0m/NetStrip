@@ -103,7 +103,7 @@ public partial class FlyoutWindow : Window
             return;
         }
         var v = update.Version;
-        UpdateRun.Text = $"Update available — v{v.ToString(v.Build > 0 ? 3 : 2)}";
+        UpdateRun.Text = $"New version available — v{v.ToString(v.Build > 0 ? 3 : 2)}";
         UpdateLink.NavigateUri = update.ReleaseUrl;
         AutomationProperties.SetName(UpdateLink, UpdateRun.Text);
         UpdatePanel.Visibility = Visibility.Visible;
@@ -118,10 +118,13 @@ public partial class FlyoutWindow : Window
 
     // ---- Live data ----------------------------------------------------------------------------
 
+    /// <summary>While true ("Pause speed display"), live speeds and the graph stay frozen; totals still refresh on open.</summary>
+    public bool SpeedsPaused { get; set; }
+
     private void OnSampleProduced(Sample s)
     {
-        // Sampler thread: cheap early-out while hidden, otherwise marshal after the app host's own handler.
-        if (!_visibleFlag) return;
+        // Sampler thread: cheap early-out while hidden or paused, otherwise marshal after the app host's own handler.
+        if (!_visibleFlag || SpeedsPaused) return;
         Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
         {
             _last = s;
@@ -216,8 +219,8 @@ public partial class FlyoutWindow : Window
         SetText(PeriodUp, "↑ " + SpeedFormatter.FormatTotal(period.UpBytes));
         AutomationProperties.SetName(TodayDown, $"Today download {SpeedFormatter.FormatTotal(today.DownBytes)}");
         AutomationProperties.SetName(TodayUp, $"Today upload {SpeedFormatter.FormatTotal(today.UpBytes)}");
-        AutomationProperties.SetName(PeriodDown, $"This period download {SpeedFormatter.FormatTotal(period.DownBytes)}");
-        AutomationProperties.SetName(PeriodUp, $"This period upload {SpeedFormatter.FormatTotal(period.UpBytes)}");
+        AutomationProperties.SetName(PeriodDown, $"This cycle download {SpeedFormatter.FormatTotal(period.DownBytes)}");
+        AutomationProperties.SetName(PeriodUp, $"This cycle upload {SpeedFormatter.FormatTotal(period.UpBytes)}");
 
         UpdateCap();
         Graph.Refresh();
@@ -225,34 +228,48 @@ public partial class FlyoutWindow : Window
 
     private void UpdateHeader()
     {
+        string glyph, name, detail, accessible;
         var adapter = _source.CurrentAdapter;
-        string glyph, name, ip;
-        if (adapter is null)
+        if (string.Equals(_settings.Current.Adapter, AdapterIds.All, StringComparison.OrdinalIgnoreCase))
         {
-            glyph = "";
+            // Speeds are the sum of every adapter, so there is no single "current" one to show.
+            var connected = _source.Adapters.Count(IsConnected);
+            glyph = connected > 0 ? "\uE968" : "\uE871";   // Network / Disconnected
+            name = "All adapters";
+            detail = connected > 0 ? $"{connected} connected" : "None connected";
+            accessible = $"All adapters, {detail}";
+        }
+        else if (adapter is null)
+        {
+            glyph = "\uE871";
             name = "Disconnected";
-            ip = "";
+            detail = "";
+            accessible = name;
         }
         else
         {
             glyph = adapter.Kind switch
             {
-                AdapterKind.Ethernet => "",
-                AdapterKind.WiFi => "",
-                AdapterKind.Cellular => "",
-                _ => "",
+                AdapterKind.Ethernet => "\uE839",
+                AdapterKind.WiFi => "\uE701",
+                AdapterKind.Cellular => "\uEC3B",
+                _ => "\uE774",
             };
             name = adapter.Name;
-            ip = adapter.IPv4 ?? "";
+            detail = adapter.IPv4 ?? "";
+            accessible = $"{adapter.Kind} connection, {name}{(detail.Length > 0 ? ", " + detail : "")}";
         }
         SetText(HeaderGlyph, glyph);
-        AutomationProperties.SetName(HeaderGlyph, adapter?.Kind.ToString() ?? "Disconnected");
+        AutomationProperties.SetName(HeaderGlyph, name);
         SetText(HeaderName, name);
-        SetText(HeaderIp, ip);
-        HeaderIp.Visibility = ip.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-        AutomationProperties.SetName(HeaderPanel,
-            adapter is null ? "Disconnected" : $"{adapter.Kind} connection, {name}{(ip.Length > 0 ? ", " + ip : "")}");
+        SetText(HeaderIp, detail);
+        HeaderIp.Visibility = detail.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        AutomationProperties.SetName(HeaderPanel, accessible);
     }
+
+    /// <summary>Has a usable IPv4 address: not a self-assigned 169.254.x.x one (link-local, no network).</summary>
+    private static bool IsConnected(AdapterInfo a) =>
+        a.IPv4 is { Length: > 0 } ip && !ip.StartsWith("169.254.", StringComparison.Ordinal);
 
     private void UpdateCap()
     {

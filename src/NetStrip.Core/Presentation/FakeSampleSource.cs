@@ -27,15 +27,13 @@ public sealed class FakeSampleSource : ISampleSource, IDisposable
     public event Action<Sample>? SampleProduced;
     public AdapterInfo? CurrentAdapter => Adapter;
     public IReadOnlyList<AdapterInfo> Adapters { get; }
-    public bool Paused { get; set; }
 
     public void Start() => _timer.Change(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
 
-    /// <summary>Produces the next sample now (unless paused).</summary>
+    /// <summary>Produces the next sample now.</summary>
     public void Tick()
     {
         var second = Interlocked.Increment(ref _second);
-        if (Paused) return;
         SampleProduced?.Invoke(PatternAt(second, FakeAdapterId) with { Time = _clock.Now });
     }
 

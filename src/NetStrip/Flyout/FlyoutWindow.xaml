@@ -91,7 +91,7 @@
                 <TextBlock Grid.Row="0" Text="Today" />
                 <TextBlock x:Name="TodayDown" Grid.Row="0" Grid.Column="1" Margin="12,0,0,0" TextAlignment="Right" MinWidth="86" Typography.NumeralAlignment="Tabular" />
                 <TextBlock x:Name="TodayUp" Grid.Row="0" Grid.Column="2" Margin="12,0,0,0" TextAlignment="Right" MinWidth="86" Typography.NumeralAlignment="Tabular" />
-                <TextBlock Grid.Row="1" Text="This period" Margin="0,4,0,0" />
+                <TextBlock Grid.Row="1" Text="This cycle" Margin="0,4,0,0" />
                 <TextBlock x:Name="PeriodDown" Grid.Row="1" Grid.Column="1" Margin="12,4,0,0" TextAlignment="Right" MinWidth="86" Typography.NumeralAlignment="Tabular" />
                 <TextBlock x:Name="PeriodUp" Grid.Row="1" Grid.Column="2" Margin="12,4,0,0" TextAlignment="Right" MinWidth="86" Typography.NumeralAlignment="Tabular" />
             </Grid>
@@ -118,7 +118,7 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock x:Name="UpdatePanel" VerticalAlignment="Center" Visibility="Collapsed">
-                    <Hyperlink x:Name="UpdateLink" AutomationProperties.Name="Update available"
+                    <Hyperlink x:Name="UpdateLink" AutomationProperties.Name="New version available"
                                RequestNavigate="OnUpdateNavigate"><Run x:Name="UpdateRun" /></Hyperlink>
                 </TextBlock>
                 <Button x:Name="SettingsButton" Grid.Column="1" Width="32" Height="32" Padding="0"

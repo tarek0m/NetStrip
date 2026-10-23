@@ -209,16 +209,20 @@ internal sealed class AppHost : IDisposable
         if (_disposed) return;
         try
         {
-            _lastSample = s;
+            // Usage and the cap keep counting while the speed display is paused; only the display freezes.
             _usage.Add(s);
-            var cfg = _settings.Current;
-            var today = _usage.Today(ScopeFor(cfg, s));
-            foreach (var surface in _host.Surfaces.Values)
-            {
-                if (surface is StripWindow strip) strip.Show(s, today, cfg.Units, cfg.IdleFade);
-            }
-            _graph.Push(s);
             _fullscreen.Poll();
+            if (!_paused)
+            {
+                _lastSample = s;
+                var cfg = _settings.Current;
+                var today = _usage.Today(ScopeFor(cfg, s));
+                foreach (var surface in _host.Surfaces.Values)
+                {
+                    if (surface is StripWindow strip) strip.Show(s, today, cfg.Units, cfg.IdleFade);
+                }
+                _graph.Push(s);
+            }
             _sampleErrorLogged = false;
         }
         catch (Exception ex)
@@ -231,9 +235,9 @@ internal sealed class AppHost : IDisposable
     private void SetPaused(bool paused)
     {
         _paused = paused;
-        _source.Paused = paused;
+        if (_flyout is not null) _flyout.SpeedsPaused = paused;
         foreach (var strip in Strips()) strip.SetPaused(paused);
-        _log.Info(paused ? "Updates paused" : "Updates resumed");
+        _log.Info(paused ? "Speed display paused (usage keeps counting)" : "Speed display resumed");
     }
 
     // ---- Fullscreen, fallback, cap ----------------------------------------------------------------------
@@ -354,6 +358,7 @@ internal sealed class AppHost : IDisposable
         foreach (var notice in _pendingNotices) flyout.AddNotice(notice);
         _pendingNotices.Clear();
         flyout.SetUpdate(_update);
+        flyout.SpeedsPaused = _paused;
         return _flyout = flyout;
     }
 
@@ -464,7 +469,7 @@ internal sealed class AppHost : IDisposable
             // null means "no update" or "checked within the last 24 h": keep whatever is already shown.
             if (result is not null && !_disposed && _settings.Current.CheckForUpdates)
             {
-                _log.Info($"Update available: {result.Version} ({result.ReleaseUrl})");
+                _log.Info($"New version available: {result.Version} ({result.ReleaseUrl})");
                 _update = result;
                 _flyout?.SetUpdate(result);
             }

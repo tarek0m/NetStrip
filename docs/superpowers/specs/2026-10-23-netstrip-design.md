@@ -107,7 +107,7 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
 - Formatting (`SpeedFormatter`): 3 significant digits, units KB/s, MB/s, GB/s (1024 base) or Kb/s, Mb/s, Gb/s (1000 base) per `units` setting (`bits` default | `bytes`). Values below 1 KB/s (or 1 Kb/s) show as `0 KB/s` / `0 Kb/s` to reduce noise; there is no B/s unit.
 - Idle fade: if both directions < 1 KB/s for 5 consecutive seconds, animate opacity to 0.45 over 200 ms; restore to 1.0 over 120 ms on activity.
 - Hover (600 ms delay): tooltip `Today ↓ 1.24 GB ↑ 210 MB`.
-- Left-click: toggle Flyout. Right-click: context menu — Settings, Pause updates, Exit.
+- Left-click: toggle Flyout. Right-click: context menu — Settings, Pause speed display, Exit. Pausing freezes the strip and the flyout's live speeds and graph only; usage totals and the data cap keep counting.
 - Hidden while `FullscreenWatcher` reports fullscreen on that monitor.
 
 ## 8. Flyout
@@ -115,11 +115,11 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
 - WPF window, Fluent theme, Mica backdrop (Win11) / solid themed background (Win10), 320 px wide, 8 px corner radius, anchored above (or beside, for side taskbars) the strip, clamped to the monitor work area.
 - Closes on deactivation or Esc.
 - Sections:
-  1. **Header:** adapter kind icon, adapter name, IPv4 address (or "Disconnected").
+  1. **Header:** adapter kind icon, adapter name, IPv4 address (or "Disconnected"). With the adapter setting on "All adapters": a network icon, "All adapters" and "N connected" (adapters with a non-link-local IPv4 address), or "None connected".
   2. **Graph:** last 60 samples; download as filled area (accent, 30 % fill), upload as 1.5 px line (teal); y-axis auto-scales to the max in window with a single max label. Custom-drawn `Polyline`/`Path`, no chart library.
   3. **Live:** current ↑ / ↓ in larger type.
-  4. **Totals:** Today ↓/↑ and This period ↓/↑; cap progress bar + "x of y GB" when a cap is set (bar turns warning color ≥ 80 %, critical ≥ 100 %).
-  5. **Footer:** settings gear; "Update available — vX.Y" link (opens release page in browser) when applicable; one-time notices (fallback mode, usage reset).
+  4. **Totals:** Today ↓/↑ and This cycle ↓/↑ (the data-cap cycle, starting on the "Cycle resets on day" setting); cap progress bar + "x of y GB" when a cap is set (bar turns warning color ≥ 80 %, critical ≥ 100 %).
+  5. **Footer:** settings gear; "New version available — vX.Y" link (opens release page in browser) when applicable; one-time notices (fallback mode, usage reset).
 
 ## 9. FullscreenWatcher
 

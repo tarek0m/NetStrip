@@ -286,38 +286,22 @@ public class NetSamplerTests
     }
 
     [Fact]
-    public void Paused_NoEventsRaised()
+    public void TickAndPublish_RaisesEverySample()
     {
+        // Pausing is a display concern (AppHost); the sampler must keep publishing so usage keeps counting.
         _table.Set("a", 0, 0);
         _table.BestId = "a";
         var sampler = Create();
         var raised = new List<Sample>();
         sampler.SampleProduced += raised.Add;
 
-        sampler.Paused = true;
-        sampler.TickAndPublish();
-        sampler.TickAndPublish();
-        Assert.Empty(raised);
-
-        sampler.Paused = false;
-        _clock.Advance(TimeSpan.FromSeconds(1));
-        var s = sampler.TickAndPublish();
-        Assert.Single(raised);
-        Assert.Same(s, raised[0]);
-    }
-
-    [Fact]
-    public void Paused_StillTracksCounters()
-    {
-        _table.Set("a", 0, 0);
-        _table.BestId = "a";
-        var sampler = Create();
-        sampler.Paused = true;
-        sampler.TickAndPublish();
-
+        var first = sampler.TickAndPublish();
         _clock.Advance(TimeSpan.FromSeconds(1));
         _table.Set("a", 1_000, 0);
-        Assert.Equal(1000, sampler.Tick().DownBytesPerSec);
+        var second = sampler.TickAndPublish();
+
+        Assert.Equal([first, second], raised);
+        Assert.Equal(1000, second.DownBytesPerSec);
     }
 
     [Fact]

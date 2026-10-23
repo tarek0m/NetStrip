@@ -73,7 +73,7 @@
                          AutomationProperties.Name="Monthly cap in gigabytes" TextChanged="OnCapChanged" />
             </Grid>
             <Grid Style="{StaticResource Row}">
-                <TextBlock Text="Resets on day" Style="{StaticResource RowLabel}" />
+                <TextBlock Text="Cycle resets on day" Style="{StaticResource RowLabel}" />
                 <ComboBox x:Name="ResetDayBox" MinWidth="100" AutomationProperties.Name="Cap reset day of month" SelectionChanged="OnResetDayChanged" />
             </Grid>
             <Grid Style="{StaticResource Row}">
@@ -83,7 +83,7 @@
 
             <TextBlock Text="General" Style="{StaticResource GroupTitle}" />
             <CheckBox x:Name="StartupBox" Content="Start NetStrip with Windows" Click="OnStartupClick" />
-            <CheckBox x:Name="UpdatesBox" Content="Check for updates" Margin="0,6,0,0" Click="OnUpdatesClick" />
+            <CheckBox x:Name="UpdatesBox" Content="Check for new versions of NetStrip" Margin="0,6,0,0" Click="OnUpdatesClick" />
         </StackPanel>
     </ScrollViewer>
 </Window>
