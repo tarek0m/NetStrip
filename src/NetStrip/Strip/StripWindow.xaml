@@ -1,0 +1,57 @@
+<Window x:Class="NetStrip.Strip.StripWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="NetStrip"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        ResizeMode="NoResize"
+        Focusable="False"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        FontFamily="Segoe UI Variable Small, Segoe UI"
+        FontSize="12"
+        Typography.NumeralAlignment="Tabular"
+        SourceInitialized="OnSourceInitialized"
+        Closed="OnClosed">
+    <Border x:Name="Root"
+            Background="Transparent"
+            ToolTipService.InitialShowDelay="600"
+            ToolTipService.ShowDuration="8000"
+            MouseLeftButtonDown="OnMouseLeftButtonDown"
+            MouseLeftButtonUp="OnMouseLeftButtonUp"
+            MouseMove="OnMouseMove">
+        <Border.ContextMenu>
+            <ContextMenu>
+                <MenuItem x:Name="SettingsItem" Header="Settings" AutomationProperties.Name="Settings" Click="OnSettingsClick" />
+                <MenuItem x:Name="PauseItem" Header="Pause updates" IsCheckable="True" AutomationProperties.Name="Pause updates" Click="OnPauseClick" />
+                <Separator />
+                <MenuItem x:Name="ExitItem" Header="Exit" AutomationProperties.Name="Exit" Click="OnExitClick" />
+            </ContextMenu>
+        </Border.ContextMenu>
+        <Grid x:Name="Inner" Margin="4,0">
+            <!-- Full / floating: arrows left, values right-aligned so changing digits never move anything. -->
+            <Grid x:Name="FullLayout" VerticalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock x:Name="UpArrow" Grid.Row="0" Grid.Column="0" Text="↑" Margin="0,0,6,0" />
+                <TextBlock x:Name="UpValue" Grid.Row="0" Grid.Column="1" TextAlignment="Right" HorizontalAlignment="Right" />
+                <TextBlock x:Name="DownArrow" Grid.Row="1" Grid.Column="0" Text="↓" Margin="0,0,6,0" />
+                <TextBlock x:Name="DownValue" Grid.Row="1" Grid.Column="1" TextAlignment="Right" HorizontalAlignment="Right" />
+            </Grid>
+            <!-- Compact: one line; shrinks (never grows) if mixed units make it wider than the measured width. -->
+            <Viewbox x:Name="CompactLayout" Visibility="Collapsed" Stretch="Uniform" StretchDirection="DownOnly"
+                     HorizontalAlignment="Right" VerticalAlignment="Center">
+                <TextBlock TextWrapping="NoWrap" FontSize="10"><Run x:Name="CompactDownArrow" Text="↓" /><Run x:Name="CompactDownRun" /><Run Text=" " /><Run x:Name="CompactUpArrow" Text="↑" /><Run x:Name="CompactUpRun" /></TextBlock>
+            </Viewbox>
+        </Grid>
+    </Border>
+</Window>

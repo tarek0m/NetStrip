@@ -1,0 +1,130 @@
+<Window x:Class="NetStrip.Flyout.FlyoutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:NetStrip.Flyout"
+        Title="NetStrip"
+        Width="320"
+        SizeToContent="Height"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        UseLayoutRounding="True"
+        Background="{DynamicResource ApplicationBackgroundBrush}"
+        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+        FontFamily="Segoe UI Variable Text, Segoe UI"
+        FontSize="14"
+        AutomationProperties.Name="NetStrip network usage"
+        Deactivated="OnDeactivated"
+        PreviewKeyDown="OnPreviewKeyDown"
+        IsVisibleChanged="OnIsVisibleChanged"
+        Closed="OnClosed">
+    <Window.Resources>
+        <Style x:Key="Caption" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style x:Key="Glyph" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+        </Style>
+    </Window.Resources>
+    <Border BorderThickness="1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+        <StackPanel Margin="16,14,16,12">
+
+            <!-- 1. Header: adapter kind glyph, name, IPv4 -->
+            <Grid x:Name="HeaderPanel" AutomationProperties.Name="Connection">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="HeaderGlyph" Style="{StaticResource Glyph}" FontSize="22" Margin="0,0,12,0"
+                           VerticalAlignment="Center" Text="&#xE839;" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock x:Name="HeaderName" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="HeaderIp" Style="{StaticResource Caption}" />
+                </StackPanel>
+            </Grid>
+
+            <!-- 2. Graph -->
+            <Border Margin="0,12,0,0" Height="84" CornerRadius="4"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <local:GraphControl x:Name="Graph" Margin="4,2"
+                                    AutomationProperties.Name="Network traffic, last 60 seconds"
+                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </Border>
+
+            <!-- 3. Live speeds -->
+            <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <StackPanel AutomationProperties.Name="Upload speed">
+                    <TextBlock Text="Upload" Style="{StaticResource Caption}" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="LiveUpArrow" Text="↑" FontSize="20" Margin="0,0,4,0" />
+                        <TextBlock x:Name="LiveUp" FontSize="20" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular" />
+                    </StackPanel>
+                </StackPanel>
+                <StackPanel Grid.Column="1" AutomationProperties.Name="Download speed">
+                    <TextBlock Text="Download" Style="{StaticResource Caption}" />
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="LiveDownArrow" Text="↓" FontSize="20" Margin="0,0,4,0" />
+                        <TextBlock x:Name="LiveDown" FontSize="20" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+
+            <!-- 4. Totals -->
+            <Grid Margin="0,14,0,0" AutomationProperties.Name="Data usage totals">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <TextBlock Grid.Row="0" Text="Today" />
+                <TextBlock x:Name="TodayDown" Grid.Row="0" Grid.Column="1" Margin="12,0,0,0" TextAlignment="Right" MinWidth="86" Typography.NumeralAlignment="Tabular" />
+                <TextBlock x:Name="TodayUp" Grid.Row="0" Grid.Column="2" Margin="12,0,0,0" TextAlignment="Right" MinWidth="86" Typography.NumeralAlignment="Tabular" />
+                <TextBlock Grid.Row="1" Text="This period" Margin="0,4,0,0" />
+                <TextBlock x:Name="PeriodDown" Grid.Row="1" Grid.Column="1" Margin="12,4,0,0" TextAlignment="Right" MinWidth="86" Typography.NumeralAlignment="Tabular" />
+                <TextBlock x:Name="PeriodUp" Grid.Row="1" Grid.Column="2" Margin="12,4,0,0" TextAlignment="Right" MinWidth="86" Typography.NumeralAlignment="Tabular" />
+            </Grid>
+
+            <!-- 5. Cap bar -->
+            <StackPanel x:Name="CapPanel" Margin="0,12,0,0" Visibility="Collapsed">
+                <ProgressBar x:Name="CapBar" Minimum="0" Maximum="1" Height="6"
+                             AutomationProperties.Name="Monthly data cap used" />
+                <TextBlock x:Name="CapText" Style="{StaticResource Caption}" Margin="0,4,0,0" />
+            </StackPanel>
+
+            <!-- 6. Footer: notices, update link, settings -->
+            <ItemsControl x:Name="NoticeList" Margin="0,12,0,0" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" TextWrapping="Wrap" Style="{StaticResource Caption}" Margin="0,0,0,4"
+                                   AutomationProperties.Name="{Binding}" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Grid Margin="0,8,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="UpdatePanel" VerticalAlignment="Center" Visibility="Collapsed">
+                    <Hyperlink x:Name="UpdateLink" AutomationProperties.Name="Update available"
+                               RequestNavigate="OnUpdateNavigate"><Run x:Name="UpdateRun" /></Hyperlink>
+                </TextBlock>
+                <Button x:Name="SettingsButton" Grid.Column="1" Width="32" Height="32" Padding="0"
+                        AutomationProperties.Name="Settings" ToolTip="Settings" Click="OnSettingsClick">
+                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE713;" FontSize="16" />
+                </Button>
+            </Grid>
+        </StackPanel>
+    </Border>
+</Window>
