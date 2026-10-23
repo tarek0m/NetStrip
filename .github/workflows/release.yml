@@ -1,0 +1,77 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write   # needed by softprops/action-gh-release to create the GitHub release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history and tags, so the tag annotation can be read for release notes
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Derive version from tag
+        shell: bash
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          if [[ ! "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Tag '$GITHUB_REF_NAME' is not a version tag (expected vMAJOR.MINOR.PATCH)." >&2
+            exit 1
+          fi
+          echo "VERSION=$ver" >> "$GITHUB_ENV"
+          echo "Release version: $ver"
+
+      - name: Test
+        run: dotnet test -c Release
+
+      - name: Publish framework-dependent (installer input)
+        run: dotnet publish src/NetStrip -c Release -r win-x64 --self-contained false "-p:Version=$env:VERSION" -o out/fd-x64
+
+      - name: Publish portable win-x64 (single file, self-contained)
+        run: dotnet publish src/NetStrip -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true "-p:Version=$env:VERSION" -o out/portable-x64
+
+      - name: Publish portable win-arm64 (single file, self-contained)
+        run: dotnet publish src/NetStrip -c Release -r win-arm64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true "-p:Version=$env:VERSION" -o out/portable-arm64
+
+      - name: Zip portable builds
+        run: |
+          $ver = $env:VERSION
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          foreach ($arch in 'x64', 'arm64') {
+            Compress-Archive -Path "out/portable-$arch/*" -DestinationPath "artifacts/NetStrip-$ver-portable-$arch.zip" -Force
+          }
+
+      - name: Build installer (Inno Setup)
+        run: |
+          $ver = $env:VERSION
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "choco install innosetup failed ($LASTEXITCODE)" }
+          }
+          & $iscc installer/netstrip.iss "/DAppVersion=$ver"
+          if ($LASTEXITCODE -ne 0) { throw "iscc failed ($LASTEXITCODE)" }
+          Copy-Item "installer/Output/NetStrip-$ver-setup-x64.exe" -Destination artifacts/
+
+      - name: Extract release notes from tag annotation
+        shell: bash
+        run: git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > release-notes.md
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          fail_on_unmatched_files: true
+          body_path: release-notes.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
