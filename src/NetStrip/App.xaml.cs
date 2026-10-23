@@ -3,7 +3,7 @@ using System.Windows;
 using System.Windows.Threading;
 using NetStrip.Core;
 using NetStrip.Core.Logging;
-using NetStrip.Core.Presentation;
+using NetStrip.Fakes;
 using NetStrip.Theme;
 
 namespace NetStrip;
@@ -11,7 +11,7 @@ namespace NetStrip;
 public partial class App : Application
 {
     private IDisposable? _instanceHandle;
-    private FakeSampleSource? _fake;
+    private FakeSession? _fake;
     private ThemeColors? _theme;
 
     public static ILog Log { get; private set; } = null!;
@@ -52,8 +52,7 @@ public partial class App : Application
         // Temporary wiring; Task 13 replaces this with AppHost composition.
         if (FakeMode)
         {
-            _fake = new FakeSampleSource();
-            _fake.Start();
+            _fake = new FakeSession(this, _theme, FloatingDebug);
         }
     }
 
