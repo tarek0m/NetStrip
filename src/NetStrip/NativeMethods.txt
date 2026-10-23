@@ -7,3 +7,7 @@ GetMonitorInfo
 GetDpiForMonitor
 WINDOW_EX_STYLE
 HWND_TOPMOST
+DwmExtendFrameIntoClientArea
+DWMWINDOWATTRIBUTE
+MARGINS
+AllowSetForegroundWindow

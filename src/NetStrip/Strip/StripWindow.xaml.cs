@@ -14,10 +14,12 @@ using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace NetStrip.Strip;
 
-public partial class StripWindow : Window, IStripSurface
+public partial class StripWindow : Window, IStripSurface, IDisposable
 {
     private const double BaseFontSizeDip = 12;          // 9 pt at 96 dpi
+    internal const double CompactFontSizeDip = 10;      // 7.5 pt at 96 dpi
     private const double HorizontalPaddingDip = 8;
+    private const double CompactPaddingDip = 4;
     private const double CapsulePaddingXDip = 14;
     private const double CapsulePaddingYDip = 6;
 
@@ -29,6 +31,9 @@ public partial class StripWindow : Window, IStripSurface
     private bool _hidden;
     private bool _faded;
     private bool _stylesApplied;
+    private bool _closed;
+    private bool _disposed;
+    private readonly nint _handle;
     private Point _pressPoint;
     private bool _pressed;
     private bool _dragged;
@@ -42,6 +47,10 @@ public partial class StripWindow : Window, IStripSurface
         ApplyTheme();
         _theme.Changed += OnThemeChanged;
         SetMode(StripMode.Full);
+
+        // TaskbarHost calls SetParent right after construction, so the HWND (with its styles) must exist now.
+        _handle = new WindowInteropHelper(this).EnsureHandle();
+        EnsureExtendedStyles(_handle);
     }
 
     public event Action? FlyoutRequested;
@@ -54,54 +63,59 @@ public partial class StripWindow : Window, IStripSurface
 
     // ---- IStripSurface ------------------------------------------------------------------------
 
-    public nint Handle
-    {
-        get
-        {
-            var h = new WindowInteropHelper(this).EnsureHandle();
-            EnsureExtendedStyles(h);
-            return h;
-        }
-    }
+    public nint Handle => _handle;
 
     public (int Width, int Height) Measure(StripMode mode, double dpiScale, int taskbarThickness)
     {
-        var lineHeight = MeasureText("↓", out _).Height;
+        var lineHeight = MeasureText("↓", BaseFontSizeDip, out _).Height;
         switch (mode)
         {
             case StripMode.Compact:
-                MeasureText("↓999 ↑999 MB/s", out var compactWidth);
-                return (Px(compactWidth + HorizontalPaddingDip, dpiScale), taskbarThickness);
+                MeasureText("↓999 ↑999 MB/s", CompactFontSizeDip, out var compactWidth);
+                return (Px(compactWidth + CompactPaddingDip, dpiScale), taskbarThickness);
             case StripMode.Floating:
-                MeasureText("↓ 999.9 MB/s", out var capsuleWidth);
+                MeasureText("↓ 999.9 MB/s", BaseFontSizeDip, out var capsuleWidth);
                 return (Px(capsuleWidth + HorizontalPaddingDip + 2 * CapsulePaddingXDip, dpiScale),
                         Px(2 * lineHeight + 2 * CapsulePaddingYDip, dpiScale));
             default:
-                MeasureText("↓ 999.9 MB/s", out var fullWidth);
+                MeasureText("↓ 999.9 MB/s", BaseFontSizeDip, out var fullWidth);
                 return (Px(fullWidth + HorizontalPaddingDip, dpiScale), taskbarThickness);
         }
     }
 
     public void Apply(StripPlacement placement)
     {
-        var hwnd = new HWND(Handle);
+        // Synchronous, physical pixels. Full/Compact bounds are relative to the parent's client area (the window is a
+        // child by now); Floating bounds are screen coordinates (TaskbarHost has already made it top-level).
+        var hwnd = new HWND(_handle);
+        var floating = placement.Mode == StripMode.Floating;
         SetMode(placement.Mode);
 
         var b = placement.Bounds;
-        if (placement.Mode == StripMode.Floating)
+        if (floating)
         {
-            Topmost = true;
             PInvoke.SetWindowPos(hwnd, HWND.HWND_TOPMOST, b.X, b.Y, b.Width, b.Height,
                 SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE);
         }
         else
         {
-            Topmost = false;
             PInvoke.SetWindowPos(hwnd, HWND.Null, b.X, b.Y, b.Width, b.Height,
                 SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE);
         }
 
         if (!_hidden && !IsVisible) base.Show();
+    }
+
+    /// <summary>Current outer bounds in screen pixels.</summary>
+    public PixelRect ScreenBounds
+    {
+        get
+        {
+            var dpi = VisualTreeHelper.GetDpi(this);
+            var origin = PointToScreen(new Point(0, 0));
+            return new PixelRect((int)Math.Round(origin.X), (int)Math.Round(origin.Y),
+                (int)Math.Round(ActualWidth * dpi.DpiScaleX), (int)Math.Round(ActualHeight * dpi.DpiScaleY));
+        }
     }
 
     public void SetHidden(bool hidden)
@@ -163,7 +177,8 @@ public partial class StripWindow : Window, IStripSurface
         var floating = mode == StripMode.Floating;
         Inner.Margin = floating
             ? new Thickness(CapsulePaddingXDip, CapsulePaddingYDip, CapsulePaddingXDip, CapsulePaddingYDip)
-            : new Thickness(HorizontalPaddingDip / 2, 0, HorizontalPaddingDip / 2, 0);
+            : compact ? new Thickness(CompactPaddingDip / 2, 0, CompactPaddingDip / 2, 0)
+                      : new Thickness(HorizontalPaddingDip / 2, 0, HorizontalPaddingDip / 2, 0);
         Root.BorderThickness = new Thickness(floating ? 1 : 0);
         Root.CornerRadius = new CornerRadius(floating ? 100 : 0);   // clamped to half the height by the border
         ApplyCapsuleBrushes();
@@ -223,17 +238,43 @@ public partial class StripWindow : Window, IStripSurface
         PInvoke.SetWindowLongPtr(hwnd, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE, ex | add);
     }
 
-    private void OnClosed(object? sender, EventArgs e) => _theme.Changed -= OnThemeChanged;
+    private void OnClosed(object? sender, EventArgs e)
+    {
+        _closed = true;
+        _theme.Changed -= OnThemeChanged;
+    }
+
+    /// <summary>Closes the window and detaches every handler. Safe after Explorer has already destroyed the window.</summary>
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _theme.Changed -= OnThemeChanged;
+        FlyoutRequested = null;
+        SettingsRequested = null;
+        ExitRequested = null;
+        PauseToggled = null;
+        FloatingMoved = null;
+        if (_closed) return;
+        try
+        {
+            Close();
+        }
+        catch (InvalidOperationException)
+        {
+            // Already closing because its parent (the taskbar) went away.
+        }
+    }
 
     /// <summary>Size of <paramref name="text"/> in the strip font, in device-independent pixels.</summary>
-    private Size MeasureText(string text, out double width)
+    private Size MeasureText(string text, double fontSize, out double width)
     {
         // A TextBlock honours Typography.NumeralAlignment, which FormattedText cannot express.
         var tb = new TextBlock
         {
             Text = text,
             FontFamily = FontFamily,
-            FontSize = BaseFontSizeDip,
+            FontSize = fontSize,
             TextWrapping = TextWrapping.NoWrap,
         };
         System.Windows.Documents.Typography.SetNumeralAlignment(tb, FontNumeralAlignment.Tabular);

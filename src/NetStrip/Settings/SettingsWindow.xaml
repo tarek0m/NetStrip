@@ -1,0 +1,86 @@
+<Window x:Class="NetStrip.Settings.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="NetStrip settings"
+        Width="440"
+        SizeToContent="Height"
+        MaxHeight="720"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource ApplicationBackgroundBrush}"
+        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+        FontFamily="Segoe UI Variable Text, Segoe UI"
+        FontSize="14"
+        AutomationProperties.Name="NetStrip settings">
+    <Window.Resources>
+        <Style x:Key="GroupTitle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,16,0,6" />
+        </Style>
+        <Style x:Key="RowLabel" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="MinWidth" Value="180" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+        </Style>
+        <Style x:Key="Row" TargetType="Grid">
+            <Setter Property="Margin" Value="0,3" />
+        </Style>
+    </Window.Resources>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="20,4,20,20">
+
+            <TextBlock Text="Display" Style="{StaticResource GroupTitle}" />
+            <Grid Style="{StaticResource Row}">
+                <TextBlock Text="Speed units" Style="{StaticResource RowLabel}" />
+                <ComboBox x:Name="UnitsBox" AutomationProperties.Name="Speed units" SelectionChanged="OnUnitsChanged">
+                    <ComboBoxItem Content="Bytes (KB/s, MB/s)" Tag="Bytes" />
+                    <ComboBoxItem Content="Bits (Kb/s, Mb/s)" Tag="Bits" />
+                </ComboBox>
+            </Grid>
+            <Grid Style="{StaticResource Row}">
+                <TextBlock Text="Theme" Style="{StaticResource RowLabel}" />
+                <ComboBox x:Name="ThemeBox" AutomationProperties.Name="Theme" SelectionChanged="OnThemeChanged">
+                    <ComboBoxItem Content="Follow system" Tag="System" />
+                    <ComboBoxItem Content="Light" Tag="Light" />
+                    <ComboBoxItem Content="Dark" Tag="Dark" />
+                </ComboBox>
+            </Grid>
+            <Grid Style="{StaticResource Row}">
+                <TextBlock Text="Show on" Style="{StaticResource RowLabel}" />
+                <ComboBox x:Name="MonitorsBox" AutomationProperties.Name="Show on monitors" SelectionChanged="OnMonitorsChanged">
+                    <ComboBoxItem Content="Primary taskbar only" Tag="Primary" />
+                    <ComboBoxItem Content="All taskbars" Tag="All" />
+                </ComboBox>
+            </Grid>
+            <CheckBox x:Name="IdleFadeBox" Content="Fade when idle" Margin="0,6,0,0" Click="OnIdleFadeClick" />
+            <CheckBox x:Name="HideFullscreenBox" Content="Hide while an app is full screen" Margin="0,6,0,0" Click="OnHideFullscreenClick" />
+
+            <TextBlock Text="Network" Style="{StaticResource GroupTitle}" />
+            <Grid Style="{StaticResource Row}">
+                <TextBlock Text="Adapter" Style="{StaticResource RowLabel}" />
+                <ComboBox x:Name="AdapterBox" AutomationProperties.Name="Adapter" SelectionChanged="OnAdapterChanged" />
+            </Grid>
+
+            <TextBlock Text="Monthly data cap" Style="{StaticResource GroupTitle}" />
+            <Grid Style="{StaticResource Row}">
+                <TextBlock Text="Cap (GB, empty for none)" Style="{StaticResource RowLabel}" />
+                <TextBox x:Name="CapBox" Width="100" HorizontalAlignment="Right" TextAlignment="Right"
+                         AutomationProperties.Name="Monthly cap in gigabytes" TextChanged="OnCapChanged" />
+            </Grid>
+            <Grid Style="{StaticResource Row}">
+                <TextBlock Text="Resets on day" Style="{StaticResource RowLabel}" />
+                <ComboBox x:Name="ResetDayBox" MinWidth="100" AutomationProperties.Name="Cap reset day of month" SelectionChanged="OnResetDayChanged" />
+            </Grid>
+            <Grid Style="{StaticResource Row}">
+                <TextBlock Text="Count traffic from" Style="{StaticResource RowLabel}" />
+                <ComboBox x:Name="CapAdapterBox" AutomationProperties.Name="Cap adapter" SelectionChanged="OnCapAdapterChanged" />
+            </Grid>
+
+            <TextBlock Text="General" Style="{StaticResource GroupTitle}" />
+            <CheckBox x:Name="StartupBox" Content="Start NetStrip with Windows" Click="OnStartupClick" />
+            <CheckBox x:Name="UpdatesBox" Content="Check for updates" Margin="0,6,0,0" Click="OnUpdatesClick" />
+        </StackPanel>
+    </ScrollViewer>
+</Window>

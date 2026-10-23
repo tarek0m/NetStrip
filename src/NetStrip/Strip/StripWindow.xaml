@@ -50,7 +50,7 @@
             <!-- Compact: one line; shrinks (never grows) if mixed units make it wider than the measured width. -->
             <Viewbox x:Name="CompactLayout" Visibility="Collapsed" Stretch="Uniform" StretchDirection="DownOnly"
                      HorizontalAlignment="Right" VerticalAlignment="Center">
-                <TextBlock TextWrapping="NoWrap"><Run x:Name="CompactDownArrow" Text="↓" /><Run x:Name="CompactDownRun" /><Run Text=" " /><Run x:Name="CompactUpArrow" Text="↑" /><Run x:Name="CompactUpRun" /></TextBlock>
+                <TextBlock TextWrapping="NoWrap" FontSize="10"><Run x:Name="CompactDownArrow" Text="↓" /><Run x:Name="CompactDownRun" /><Run Text=" " /><Run x:Name="CompactUpArrow" Text="↑" /><Run x:Name="CompactUpRun" /></TextBlock>
             </Viewbox>
         </Grid>
     </Border>

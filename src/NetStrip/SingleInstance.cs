@@ -35,6 +35,8 @@ public static class SingleInstance
     {
         try
         {
+            // Let the running instance take foreground so its flyout can activate (and close on deactivation).
+            Windows.Win32.PInvoke.AllowSetForegroundWindow(uint.MaxValue);
             using var activate = EventWaitHandle.OpenExisting(ActivateEventName);
             activate.Set();
         }
