@@ -10,17 +10,25 @@ public static class FullscreenRule
 
     /// <param name="window">Foreground window rect (screen pixels).</param>
     /// <param name="monitor">Full bounds of the monitor the window is on.</param>
+    /// <param name="workArea">That monitor's work area (bounds minus visible taskbars).</param>
     /// <param name="isShellOrDesktop">The window is the shell/desktop (never counts as a fullscreen app).</param>
     /// <param name="quns">SHQueryUserNotificationState value, or 0 when the query failed.</param>
-    public static bool IsFullscreen(PixelRect window, PixelRect monitor, bool isShellOrDesktop, int quns)
+    public static bool IsFullscreen(PixelRect window, PixelRect monitor, PixelRect workArea, bool isShellOrDesktop, int quns)
     {
         if (isShellOrDesktop) return false;
-        if (quns is QunsBusy or QunsRunningD3DFullScreen or QunsPresentationMode) return true;
 
-        // Covers the whole monitor (borderless fullscreen windows may overhang slightly).
-        return window.X <= monitor.X
-            && window.Y <= monitor.Y
-            && window.X + window.Width >= monitor.X + monitor.Width
-            && window.Y + window.Height >= monitor.Y + monitor.Height;
+        // Exactly the monitor's bounds: fullscreen on its own. Larger rects (maximized windows overhanging an
+        // auto-hide taskbar monitor, windows spanning several monitors) are not.
+        if (window == monitor) return true;
+
+        // QUNS is system-wide, so it only counts for a foreground window that is at least work-area sized;
+        // otherwise a fullscreen app on another monitor would hide this monitor's strip.
+        return quns is QunsBusy or QunsRunningD3DFullScreen or QunsPresentationMode && Covers(window, workArea);
     }
+
+    private static bool Covers(PixelRect outer, PixelRect inner) =>
+        outer.X <= inner.X
+        && outer.Y <= inner.Y
+        && outer.X + outer.Width >= inner.X + inner.Width
+        && outer.Y + outer.Height >= inner.Y + inner.Height;
 }

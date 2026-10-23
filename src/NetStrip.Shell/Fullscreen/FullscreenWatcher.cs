@@ -55,7 +55,7 @@ public sealed class FullscreenWatcher(ILog log)
         if (!PInvoke.GetWindowRect(foreground, out var rect)) return null;
         var quns = PInvoke.SHQueryUserNotificationState(out var state).Succeeded ? (int)state : 0;
 
-        return FullscreenRule.IsFullscreen(TaskbarKeys.ToPixelRect(rect), facts.Bounds, IsShellOrDesktop(foreground), quns)
+        return FullscreenRule.IsFullscreen(TaskbarKeys.ToPixelRect(rect), facts.Bounds, facts.WorkArea, IsShellOrDesktop(foreground), quns)
             ? facts.Key
             : null;
     }
