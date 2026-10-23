@@ -7,7 +7,15 @@
     <!-- Pointer-sized window-long APIs exist only as arch-specific metadata; x64 and arm64 share the same Ptr signatures. -->
     <CsWin32PlatformTarget>x64</CsWin32PlatformTarget>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Working-set budget (spec: ≤ 60 MB): no PGO instrumentation for an app that does a little work once a second. -->
+    <TieredPGO>false</TieredPGO>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Workstation GC sizes gen0 from the CPU's last-level cache (4/5 of it), so on a big desktop CPU the heap walks
+         through 25-100 MB of fresh pages between collections and the working set creeps up. Cap it at 4 MB: at this
+         app's allocation rate that is a tiny gen0 GC every few minutes. -->
+    <RuntimeHostConfigurationOption Include="System.GC.Gen0MaxBudget" Value="4194304" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.367" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
