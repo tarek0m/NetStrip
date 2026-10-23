@@ -13,3 +13,7 @@ MARGINS
 AllowSetForegroundWindow
 GetCurrentProcess
 SetProcessWorkingSetSizeEx
+GetWindowRect
+GetWindow
+GetClassName
+IsWindowVisible

@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using NetStrip.Core;
 using NetStrip.Core.Presentation;
 using NetStrip.Platform;
@@ -35,6 +36,7 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
     private StripMode _mode = StripMode.Full;
     private bool _hidden;
     private bool _placed;
+    private bool _layoutLogPending;
     private bool _faded;
     private bool _stylesApplied;
     private bool _closed;
@@ -131,6 +133,7 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         // differ, text is clipped, so record both whenever the placement changes.
         App.Log.Info($"Strip placed: {placement.Mode} {b.Width}x{b.Height} px at ({b.X}, {b.Y}); " +
                      $"taskbar DPI scale {placement.DpiScale:0.###}, WPF DPI scale {VisualTreeHelper.GetDpi(this).DpiScaleX:0.###}");
+        _layoutLogPending = true;
 
         _placed = true;
         if (!_hidden && !IsVisible) base.Show();
@@ -175,6 +178,11 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
             CompactUpRun.Text = _vm.CompactUp;
         }
         if ((changes & StripViewModel.Changes.Tooltip) != 0) Root.ToolTip = _vm.Tooltip;
+        if (_layoutLogPending && _placed)
+        {
+            _layoutLogPending = false;
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, LogLayout);   // after this text is laid out
+        }
         if ((changes & StripViewModel.Changes.Name) != 0)
         {
             AutomationProperties.SetName(Root, _vm.AccessibleName);
@@ -311,6 +319,46 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         tb.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         width = tb.DesiredSize.Width;
         return tb.DesiredSize;
+    }
+
+    /// <summary>
+    /// Diagnostics for the clipped speed text: what WPF laid out versus what the text needs, and which sibling windows
+    /// above the strip overlap it. Runs after the first sample following each placement change.
+    /// </summary>
+    private unsafe void LogLayout()
+    {
+        if (_closed) return;
+        try
+        {
+            var hwnd = new HWND(_handle);
+            if (!PInvoke.GetWindowRect(hwnd, out var own)) return;
+            MeasureText(UpValue.Text, UpValue.FontSize, out var upNeeds);
+            MeasureText(DownValue.Text, DownValue.FontSize, out var downNeeds);
+            var line = new System.Text.StringBuilder()
+                .Append($"Strip layout: window {own.right - own.left}x{own.bottom - own.top} px at screen ({own.left}, {own.top}), ")
+                .Append($"WPF {ActualWidth:0.#}x{ActualHeight:0.#} DIP; ")
+                .Append($"up '{UpValue.Text}' needs {upNeeds:0.#} DIP, has {UpValue.ActualWidth:0.#}; ")
+                .Append($"down '{DownValue.Text}' needs {downNeeds:0.#} DIP, has {DownValue.ActualWidth:0.#}; ")
+                .Append($"font '{UpValue.FontFamily}' {UpValue.FontSize:0.#}");
+
+            const int MaxClassName = 128;
+            char* className = stackalloc char[MaxClassName];
+            var above = 0;
+            for (var w = PInvoke.GetWindow(hwnd, GET_WINDOW_CMD.GW_HWNDPREV); !w.IsNull; w = PInvoke.GetWindow(w, GET_WINDOW_CMD.GW_HWNDPREV))
+            {
+                if (!PInvoke.IsWindowVisible(w) || !PInvoke.GetWindowRect(w, out var r)) continue;
+                if (r.left >= own.right || own.left >= r.right || r.top >= own.bottom || own.top >= r.bottom) continue;
+                var length = PInvoke.GetClassName(w, className, MaxClassName);
+                line.Append($"; covered by '{new string(className, 0, length)}' at ({r.left}, {r.top}) {r.right - r.left}x{r.bottom - r.top}");
+                above++;
+            }
+            if (above == 0) line.Append("; no overlapping window above it");
+            App.Log.Info(line.ToString());
+        }
+        catch (Exception ex)
+        {
+            App.Log.Warn("Logging the strip layout failed", ex);
+        }
     }
 
     private static int Px(double dip, double dpiScale) => (int)Math.Ceiling(dip * dpiScale);
