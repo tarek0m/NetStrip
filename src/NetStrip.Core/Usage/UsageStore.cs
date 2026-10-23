@@ -10,6 +10,9 @@ namespace NetStrip.Core.Usage;
 public sealed class UsageStore(string path, IClock clock, IFileSystem fs, ILog log) : IUsageQuery
 {
     private const int RetentionMonths = 13;
+    // A date is pruned only if it is also older than the 397th most recent date with data (≈ the most days 13 months
+    // hold). A clock that jumps forward adds one new date, so it can never wipe the history (spec §5 intent).
+    private const int MinDatesKept = 397;
     private const string DateFormat = "yyyy-MM-dd";
     private const double BytesPerGb = 1024.0 * 1024 * 1024;   // same 1024 base as the totals display
 
@@ -25,6 +28,8 @@ public sealed class UsageStore(string path, IClock clock, IFileSystem fs, ILog l
     private double? _capGb;
     private bool _dirty;
     private DateOnly _lastPruned;
+    private bool _unreadFile;      // usage.json exists but could not be read: never overwrite it until it has been
+    private bool _unreadLogged;
 
     public string? LoadNotice { get; private set; }
 
@@ -56,14 +61,27 @@ public sealed class UsageStore(string path, IClock clock, IFileSystem fs, ILog l
             _adapters.Clear();
             _capFired.Clear();
             _dirty = false;
+            _unreadFile = false;
             LoadNotice = null;
 
             string? text;
             try
             {
-                text = fs.ReadAllText(path);
-                if (text is null) return;
-                Parse(text);
+                text = FileReads.ReadWithRetry(fs, path);
+            }
+            catch (Exception ex)
+            {
+                // Locked or inaccessible, not proven corrupt: keep the file and merge it in on a later save.
+                _unreadFile = true;
+                _unreadLogged = true;
+                log.Error($"Could not read usage file {path}; leaving it untouched and retrying before the next save", ex);
+                return;
+            }
+            if (text is null) return;
+
+            try
+            {
+                Parse(text, _adapters, _capFired);
             }
             catch (Exception ex)
             {
@@ -85,6 +103,7 @@ public sealed class UsageStore(string path, IClock clock, IFileSystem fs, ILog l
             lock (_gate)
             {
                 if (!_dirty) return;
+                if (_unreadFile && !TryMergeUnreadFile()) return;   // keep the data in memory; never clobber the file
                 json = Serialize();
                 _dirty = false;
             }
@@ -125,7 +144,16 @@ public sealed class UsageStore(string path, IClock clock, IFileSystem fs, ILog l
             crossed = EvaluateCap(today);
         }
 
-        if (crossed is { } level) CapThresholdCrossed?.Invoke(level);
+        if (crossed is not { } level) return;
+        try
+        {
+            CapThresholdCrossed?.Invoke(level);
+        }
+        catch (Exception ex)
+        {
+            // Add runs inside the sampler chain; a failing subscriber must not break counting.
+            log.Error("A data cap warning handler failed", ex);
+        }
     }
 
     public Totals Today(string scope)
@@ -225,15 +253,16 @@ public sealed class UsageStore(string path, IClock clock, IFileSystem fs, ILog l
     private void Prune(DateOnly today)
     {
         _lastPruned = today;
-        var cutoff = today.AddMonths(-RetentionMonths);
+        var calendarCutoff = today.AddMonths(-RetentionMonths);
+        var keptByCount = _adapters.Values.SelectMany(days => days.Keys).Distinct()
+            .OrderDescending().Skip(MinDatesKept - 1).FirstOrDefault();   // MinValue while fewer dates exist
+        var cutoff = keptByCount < calendarCutoff ? keptByCount : calendarCutoff;
 
         foreach (var (id, days) in _adapters)
         {
-            while (days.Count > 0)
+            while (days.Count > 0 && days.Keys.First() < cutoff)
             {
-                var oldest = days.Keys.First();
-                if (oldest >= cutoff) break;
-                days.Remove(oldest);
+                days.Remove(days.Keys.First());
                 _dirty = true;
             }
             if (days.Count == 0) _adapters.Remove(id);
@@ -246,7 +275,67 @@ public sealed class UsageStore(string path, IClock clock, IFileSystem fs, ILog l
         }
     }
 
-    private void Parse(string text)
+    /// <summary>
+    /// Called under <c>_gate</c> before saving when Load could not read the file. Merges what the file holds into
+    /// memory (or quarantines it if it turns out to be corrupt). False while it is still unreadable.
+    /// </summary>
+    private bool TryMergeUnreadFile()
+    {
+        string? text;
+        try
+        {
+            text = FileReads.ReadWithRetry(fs, path);
+        }
+        catch (Exception ex)
+        {
+            if (!_unreadLogged) log.Warn($"Usage file {path} is still unreadable; not saving over it", ex);
+            _unreadLogged = true;
+            return false;
+        }
+
+        _unreadFile = false;
+        if (text is null) return true;
+
+        var adapters = new Dictionary<string, SortedDictionary<DateOnly, long[]>>(StringComparer.Ordinal);
+        var capFired = new Dictionary<DateOnly, List<CapLevel>>();
+        try
+        {
+            Parse(text, adapters, capFired);
+        }
+        catch (Exception ex)
+        {
+            Quarantine(ex);
+            return true;
+        }
+
+        foreach (var (id, fileDays) in adapters)
+        {
+            if (!_adapters.TryGetValue(id, out var days)) _adapters[id] = days = new SortedDictionary<DateOnly, long[]>();
+            foreach (var (date, pair) in fileDays)
+            {
+                if (days.TryGetValue(date, out var bucket))
+                {
+                    bucket[0] += pair[0];
+                    bucket[1] += pair[1];
+                }
+                else
+                {
+                    days[date] = pair;
+                }
+            }
+        }
+        foreach (var (periodStart, levels) in capFired)
+        {
+            if (!_capFired.TryGetValue(periodStart, out var fired)) _capFired[periodStart] = fired = [];
+            foreach (var level in levels.Where(l => !fired.Contains(l))) fired.Add(level);
+        }
+        log.Info($"Usage file {path} is readable again; merged it with this session's usage");
+        Prune(LocalToday());
+        return true;
+    }
+
+    private static void Parse(string text, Dictionary<string, SortedDictionary<DateOnly, long[]>> adaptersOut,
+        Dictionary<DateOnly, List<CapLevel>> capFiredOut)
     {
         var file = JsonSerializer.Deserialize<UsageFile>(text, JsonOptions)
                    ?? throw new InvalidDataException("usage file is empty");
@@ -262,7 +351,7 @@ public sealed class UsageStore(string path, IClock clock, IFileSystem fs, ILog l
                         throw new InvalidDataException($"bad bucket for {id} {dateText}");
                     parsed[ParseDate(dateText)] = [pair[0], pair[1]];
                 }
-                _adapters[id] = parsed;
+                adaptersOut[id] = parsed;
             }
         }
 
@@ -277,7 +366,7 @@ public sealed class UsageStore(string path, IClock clock, IFileSystem fs, ILog l
                     if (Enum.TryParse<CapLevel>(name, out var level) && level != CapLevel.None && !levels.Contains(level))
                         levels.Add(level);
                 }
-                _capFired[ParseDate(dateText)] = levels;
+                capFiredOut[ParseDate(dateText)] = levels;
             }
         }
     }

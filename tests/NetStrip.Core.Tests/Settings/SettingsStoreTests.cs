@@ -152,6 +152,35 @@ public class SettingsStoreTests
         Assert.NotEmpty(_log.Errors);
     }
 
+    [Fact]
+    public void BrieflyLockedFile_IsReadAfterRetry()
+    {
+        _fs.Files[Path] = """{ "units": "bits" }""";
+        _fs.FailingReads = 2;
+
+        Assert.Equal(SpeedUnits.Bits, Create().Load().Units);
+        Assert.Empty(_fs.Moves);
+    }
+
+    [Fact]
+    public void LockedFile_UsesDefaults_WithoutBackingUpOrOverwritingIt()
+    {
+        var original = """{ "units": "bits" }""";
+        _fs.Files[Path] = original;
+        _fs.FailingReads = 100;
+        var store = Create();
+
+        var s = store.Load();
+        store.Update(x => x.IdleFade = false);
+
+        Assert.Equal(SpeedUnits.Bytes, s.Units);
+        Assert.False(store.Current.IdleFade);    // the change still applies for this session
+        Assert.Empty(_fs.Moves);
+        Assert.Empty(_fs.AtomicWrites);
+        Assert.Equal(original, _fs.Files[Path]);
+        Assert.NotEmpty(_log.Errors);
+    }
+
     [Theory]
     [InlineData(0, 1)]
     [InlineData(-5, 1)]

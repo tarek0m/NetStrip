@@ -15,6 +15,7 @@ public sealed class SettingsStore(string path, IFileSystem fs, ILog log, IClock?
     private readonly object _gate = new();
     private readonly IClock _clock = clock ?? new SystemClock();
     private volatile AppSettings _current = new();
+    private bool _unreadFile;   // settings.json exists but could not be read: saving would overwrite the user's settings
 
     public AppSettings Current => _current;
 
@@ -25,9 +26,21 @@ public sealed class SettingsStore(string path, IFileSystem fs, ILog log, IClock?
         lock (_gate)
         {
             AppSettings loaded;
+            string? text = null;
+            _unreadFile = false;
             try
             {
-                var text = fs.ReadAllText(path);
+                text = FileReads.ReadWithRetry(fs, path);
+            }
+            catch (Exception ex)
+            {
+                // Locked or inaccessible, not proven invalid: use defaults for this session and leave the file alone.
+                _unreadFile = true;
+                log.Error($"Could not read settings file {path}; using defaults for this session without saving over it", ex);
+            }
+
+            try
+            {
                 loaded = text is null
                     ? new AppSettings()
                     : JsonSerializer.Deserialize<AppSettings>(text, JsonOptions) ?? throw new InvalidDataException("settings file is empty");
@@ -65,6 +78,11 @@ public sealed class SettingsStore(string path, IFileSystem fs, ILog log, IClock?
 
     private void Write(AppSettings settings)
     {
+        if (_unreadFile)
+        {
+            log.Warn($"Not saving settings: {path} could not be read at startup, and saving would replace it");
+            return;
+        }
         try
         {
             fs.WriteAllTextAtomic(path, JsonSerializer.Serialize(settings, JsonOptions));

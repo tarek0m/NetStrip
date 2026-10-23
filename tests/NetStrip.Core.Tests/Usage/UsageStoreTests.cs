@@ -332,24 +332,133 @@ public class UsageStoreTests
         Assert.Single(_fs.AtomicWrites);
     }
 
+    /// <summary>A usage file with one bucket per day for adapter "a", plus any extra raw JSON members.</summary>
+    private static string DailyFile(DateOnly first, DateOnly last, string extraAdapters = "", string capFired = "{}")
+    {
+        var days = new List<string>();
+        for (var d = first; d <= last; d = d.AddDays(1)) days.Add($"\"{d:yyyy-MM-dd}\": [1,1]");
+        return $$"""{ "version": 1, "adapters": { "a": { {{string.Join(", ", days)}} }{{extraAdapters}} }, "capFired": {{capFired}} }""";
+    }
+
+    private List<string> SavedDates(string adapter) =>
+        Parse(SavedJson()).GetProperty("adapters").GetProperty(adapter).EnumerateObject().Select(p => p.Name).Order().ToList();
+
     [Fact]
     public void Retention_Prunes13Months()
     {
-        _fs.Files[Path] = """
-            { "version": 1,
-              "adapters": { "a": { "2025-09-22": [1,1], "2025-09-23": [2,2], "2026-10-01": [3,3] },
-                            "old": { "2024-01-01": [9,9] } },
-              "capFired": { "2025-09-01": ["Warning80"], "2026-10-01": ["Warning80"] } }
-            """;
+        // Today 2026-10-23: the 13-month cutoff is 2025-09-23, and the 397th most recent date is 2025-09-21.
+        _fs.Files[Path] = DailyFile(new DateOnly(2025, 7, 1), new DateOnly(2026, 10, 22),
+            extraAdapters: """, "old": { "2024-01-01": [9,9] }""",
+            capFired: """{ "2025-09-01": ["Warning80"], "2026-10-01": ["Warning80"] }""");
         var store = Create();
         store.Load();
         store.Save();
 
+        var dates = SavedDates("a");
+        Assert.Equal(397, dates.Count);
+        Assert.Equal("2025-09-21", dates[0]);
         var root = Parse(SavedJson());
-        var a = root.GetProperty("adapters").GetProperty("a");
-        Assert.Equal(["2025-09-23", "2026-10-01"], a.EnumerateObject().Select(p => p.Name).Order());
         Assert.False(root.GetProperty("adapters").TryGetProperty("old", out _));
         Assert.Equal(["2026-10-01"], root.GetProperty("capFired").EnumerateObject().Select(p => p.Name));
+    }
+
+    [Fact]
+    public void Retention_FewerDatesThanThirteenMonthsHold_KeepsEverything()
+    {
+        // Sporadic use: data older than 13 months stays until enough newer days of use exist.
+        _fs.Files[Path] = """{ "version": 1, "adapters": { "a": { "2024-01-01": [1,1], "2026-10-01": [2,2] } } }""";
+        var store = Create();
+        store.Load();
+        store.Add(S(1, 1));
+        store.Save();
+
+        Assert.Equal(["2024-01-01", "2026-10-01", "2026-10-23"], SavedDates("a"));
+    }
+
+    [Fact]
+    public void ClockJumpingForward_DoesNotDeleteHistory()
+    {
+        _fs.Files[Path] = DailyFile(new DateOnly(2026, 1, 1), new DateOnly(2026, 10, 22));
+        var store = Create();
+        store.Load();
+
+        At(2029, 6, 1);                          // e.g. a wrong BIOS date
+        store.Add(S(5, 5));
+        store.Save();
+
+        var dates = SavedDates("a");
+        Assert.Equal(296, dates.Count);          // 295 real days + the bogus one
+        Assert.Equal("2026-01-01", dates[0]);
+        Assert.Equal("2029-06-01", dates[^1]);
+    }
+
+    [Fact]
+    public void CapHandlerThrowing_DoesNotEscapeAdd_AndCountingContinues()
+    {
+        var store = Create();
+        store.CapGb = 1;
+        store.CapThresholdCrossed += _ => throw new InvalidOperationException("toast failed");
+
+        store.Add(S(0, Gb));                     // crosses both levels; the handler throws
+        store.Add(S(0, 1000));
+
+        Assert.Equal(new Totals(0, Gb + 1000), store.Today("a"));
+        Assert.NotEmpty(_log.Errors);
+    }
+
+    [Fact]
+    public void BrieflyLockedFile_IsReadAfterRetry()
+    {
+        _fs.Files[Path] = """{ "version": 1, "adapters": { "a": { "2026-10-23": [3,4] } } }""";
+        _fs.FailingReads = 1;
+        var store = Create();
+
+        store.Load();
+
+        Assert.Equal(new Totals(3, 4), store.Today("a"));
+        Assert.Empty(_fs.Moves);
+    }
+
+    [Fact]
+    public void LockedFile_IsNotQuarantined_NotOverwritten_ThenMergedWhenReadable()
+    {
+        var original = """{ "version": 1, "adapters": { "a": { "2026-10-22": [10,20], "2026-10-23": [1,2] } } }""";
+        _fs.Files[Path] = original;
+        _fs.FailingReads = 100;
+        var store = Create();
+
+        store.Load();
+        Assert.Empty(_fs.Moves);
+        Assert.Null(store.LoadNotice);
+
+        store.Add(S(5, 5));
+        store.Save();                            // still locked: nothing is written over it
+        Assert.Empty(_fs.AtomicWrites);
+        Assert.Equal(original, _fs.Files[Path]);
+
+        _fs.FailingReads = 0;
+        store.Save();                            // readable now: file and session merged, then saved
+
+        var a = Parse(SavedJson()).GetProperty("adapters").GetProperty("a");
+        Assert.Equal("[10,20]", a.GetProperty("2026-10-22").GetRawText());
+        Assert.Equal("[6,7]", a.GetProperty("2026-10-23").GetRawText());
+        Assert.Equal(new Totals(6, 7), store.Today("a"));
+    }
+
+    [Fact]
+    public void LockedFile_CorruptOnceReadable_IsQuarantinedThenSessionSaved()
+    {
+        _fs.Files[Path] = "{ not json";
+        _fs.FailingReads = 100;
+        var store = Create();
+        store.Load();
+        store.Add(S(5, 5));
+
+        _fs.FailingReads = 0;
+        store.Save();
+
+        Assert.Single(_fs.Moves);
+        Assert.Equal(["2026-10-23"], SavedDates("a"));
     }
 
     [Fact]

@@ -67,8 +67,9 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
 - Per adapter id: daily buckets `{date (local), upBytes, downBytes}`.
 - Each `Sample` adds to the current local day; day boundary uses `IClock.Now` local date (DST-safe because buckets are keyed by date, not by 24 h spans).
 - Persist to `%AppData%\NetStrip\usage.json` every 60 s and on shutdown, via write-to-temp + `File.Replace` (atomic).
-- Retention: 13 months; older buckets pruned on load.
-- Corrupt/unreadable file → rename to `usage.json.bad-<timestamp>`, start empty, log, and show a one-time notice in the flyout.
+- Retention: 13 months; older buckets pruned on load and at day rollover. A date is pruned only if it is also older than the 397th most recent date with data, so a clock that jumps forward can never wipe the history.
+- Corrupt file → rename to `usage.json.bad-<timestamp>`, start empty, log, and show a one-time notice in the flyout.
+- File that cannot be read (locked by antivirus/backup/sync; read retried briefly first) → leave it untouched, start empty, log; before the next save, read it again and merge it with this session's usage (or quarantine it if it turns out to be corrupt). Never save over a file that has not been read.
 - Monthly period: from `capResetDay` (1–28, default 1) of the current month to the day before the next reset.
 - Data cap (`capGb`, null = off) applies to the adapter scope set by `capAdapter` (`all` default, or an adapter id). Toast notifications (via `Microsoft.Toolkit.Uwp.Notifications` `ToastContentBuilder`, which supports unpackaged desktop apps on Win10/11) at 80 % and 100 %, each at most once per period.
 - Queries: `Today(adapterScope)`, `ThisPeriod(adapterScope)`, `CapProgress()`.
@@ -146,6 +147,7 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
 | `floatingPosition` | `{x,y}` \| null |
 
 - Invalid file → back up as `.bad-<timestamp>`, use defaults, log.
+- File that cannot be read (read retried briefly first) → use defaults for this session, log, and do not save over it.
 - Start with Windows: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\NetStrip`.
 - Settings window: Fluent `Window` with grouped controls for the keys above; changes apply live.
 

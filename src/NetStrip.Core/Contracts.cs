@@ -113,7 +113,17 @@ public sealed class SystemClock : IClock
 
 public sealed class RealFileSystem : IFileSystem
 {
-    public string? ReadAllText(string path) => File.Exists(path) ? File.ReadAllText(path) : null;
+    public string? ReadAllText(string path)
+    {
+        try
+        {
+            return File.ReadAllText(path);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return null;
+        }
+    }
 
     public void WriteAllTextAtomic(string path, string contents)
     {
