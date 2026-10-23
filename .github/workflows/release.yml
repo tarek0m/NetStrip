@@ -78,13 +78,18 @@ jobs:
           path: artifacts/*
           if-no-files-found: error
 
-      - name: Extract release notes from tag annotation
+      - name: Extract release notes
         if: github.ref_type == 'tag'
         shell: bash
         run: |
-          # actions/checkout can fetch the tag without its annotation; fetch it again so %(contents) is the message.
-          git fetch --force --tags origin
-          git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > release-notes.md
+          # Prefer docs/release-notes/v<version>.md verbatim: git strips "#" lines (Markdown headings) from tag messages.
+          if [[ -f "docs/release-notes/$GITHUB_REF_NAME.md" ]]; then
+            cp "docs/release-notes/$GITHUB_REF_NAME.md" release-notes.md
+          else
+            # actions/checkout can fetch the tag without its annotation; fetch it again so %(contents) is the message.
+            git fetch --force --tags origin
+            git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > release-notes.md
+          fi
           if ! grep -q '[^[:space:]]' release-notes.md; then
             echo "NetStrip $VERSION" > release-notes.md
           fi
