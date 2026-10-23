@@ -482,3 +482,7 @@ $RECYCLE.BIN/
 *.swp
 
 .superpowers/
+
+# NetStrip release outputs (dotnet publish -o out/..., Inno Setup)
+out/
+installer/Output/

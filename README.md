@@ -20,12 +20,10 @@ A minimal Windows network speed monitor. NetStrip shows live upload and download
 
 ## Install
 
-Download the latest build from the [Releases page](https://github.com/<owner>/NetStrip/releases).
+Download the latest build from the [Releases page](https://github.com/tarek0m/NetStrip/releases).
 
 - `NetStrip-<version>-setup-x64.exe`: per-user installer. It installs to `%LocalAppData%\Programs\NetStrip`, adds an optional "Start with Windows" setting, and uninstalls cleanly, including the startup entry.
 - `NetStrip-<version>-portable-x64.zip` and `NetStrip-<version>-portable-arm64.zip`: single-file, self-contained `NetStrip.exe`. Extract and run.
-
-> `<owner>` is a placeholder. Replace it with the GitHub owner once the repository is published.
 
 ### SmartScreen warning
 
