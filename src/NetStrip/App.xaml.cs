@@ -1,5 +1,7 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Interop;
+using System.Windows.Media;
 using NetStrip.Core;
 using NetStrip.Core.Logging;
 
@@ -41,6 +43,10 @@ public partial class App : Application
             Log.Info($"Session ending ({args.ReasonSessionEnding}); saving usage.");
             _host?.SaveUsage();
         };
+
+        // A few lines of text redrawn once a second do not need the GPU, and hardware rendering loads Direct3D and the
+        // display driver (tens of MB and many driver threads) into the process. Must be set before any window exists.
+        RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
 
         try
         {
