@@ -136,7 +136,7 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
 | `units` | `bytes` \| `bits`, `bits` |
 | `adapter` | `auto` \| `all` \| adapter GUID, `auto` |
 | `monitors` | `primary` \| `all`, `primary` |
-| `startWithWindows` | bool, true (installer default) |
+| `startWithWindows` | bool, mirrors the Run key (which is the source of truth) |
 | `hideInFullscreen` | bool, true |
 | `idleFade` | bool, true |
 | `theme` | `system` \| `light` \| `dark`, `system` |
@@ -148,7 +148,7 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
 
 - Invalid file → back up as `.bad-<timestamp>`, use defaults, log.
 - File that cannot be read (read retried briefly first) → use defaults for this session, log, and do not save over it.
-- Start with Windows: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\NetStrip`.
+- Start with Windows: `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\NetStrip`, written by the installer's task or the settings checkbox. The checkbox shows the Run key, ticked only when it starts this copy's exe; the app never registers itself without the user asking.
 - Settings window: Fluent `Window` with grouped controls for the keys above; changes apply live.
 
 ## 11. UpdateChecker

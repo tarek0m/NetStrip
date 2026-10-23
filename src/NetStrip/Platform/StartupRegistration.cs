@@ -1,8 +1,12 @@
 using Microsoft.Win32;
+using NetStrip.Core.Settings;
 
 namespace NetStrip.Platform;
 
-/// <summary>"Start with Windows" via <c>HKCU\Software\Microsoft\Windows\CurrentVersion\Run\NetStrip</c> (no admin needed).</summary>
+/// <summary>
+/// "Start with Windows" via <c>HKCU\Software\Microsoft\Windows\CurrentVersion\Run\NetStrip</c> (no admin needed). The
+/// Run value is the source of truth: the installer writes it too, and the settings checkbox reads it back.
+/// </summary>
 public static class StartupRegistration
 {
     public const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -12,14 +16,15 @@ public static class StartupRegistration
     {
         using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true);
         if (enabled)
-            key.SetValue(ValueName, "\"" + exePath + "\"", RegistryValueKind.String);
+            key.SetValue(ValueName, StartupCommand.For(exePath), RegistryValueKind.String);
         else
             key.DeleteValue(ValueName, throwOnMissingValue: false);
     }
 
-    public static bool IsEnabled()
+    /// <summary>True when Windows will start this copy of NetStrip at sign-in.</summary>
+    public static bool IsEnabledFor(string exePath)
     {
         using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath);
-        return key?.GetValue(ValueName) is string { Length: > 0 };
+        return StartupCommand.Starts(key?.GetValue(ValueName) as string, exePath);
     }
 }

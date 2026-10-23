@@ -45,7 +45,7 @@ public partial class SettingsWindow : Window
         CapBox.Text = s.CapGb is { } gb ? gb.ToString("0.##", CultureInfo.CurrentCulture) : "";
         Select(ResetDayBox, Math.Clamp(s.CapResetDay, 1, 28));
         SelectOrAdd(CapAdapterBox, s.CapAdapter);
-        StartupBox.IsChecked = s.StartWithWindows;
+        StartupBox.IsChecked = StartsWithWindows();
         UpdatesBox.IsChecked = s.CheckForUpdates;
     }
 
@@ -147,18 +147,35 @@ public partial class SettingsWindow : Window
         Apply(s => s.CapGb = value);
     }
 
+    /// <summary>What Windows will actually do at sign-in for this copy: the Run key, not the saved setting.</summary>
+    private static bool StartsWithWindows()
+    {
+        try
+        {
+            return Environment.ProcessPath is { } exe && StartupRegistration.IsEnabledFor(exe);
+        }
+        catch (Exception ex)
+        {
+            App.Log.Warn("Could not read the Run key", ex);
+            return false;
+        }
+    }
+
     private void OnStartupClick(object sender, RoutedEventArgs e)
     {
         var v = StartupBox.IsChecked == true;
         try
         {
-            if (Environment.ProcessPath is { } exe) StartupRegistration.Set(v, exe);
+            if (Environment.ProcessPath is not { } exe) throw new InvalidOperationException("The app's path is unknown.");
+            StartupRegistration.Set(v, exe);
         }
         catch (Exception ex)
         {
             App.Log.Warn("Could not update the Run key", ex);
+            StartupBox.IsChecked = StartsWithWindows();   // show what is really registered
+            return;
         }
-        Apply(s => s.StartWithWindows = v);
+        Apply(s => s.StartWithWindows = v);   // kept in sync for reference; the Run key is the source of truth
     }
 
     private void OnUpdatesClick(object sender, RoutedEventArgs e)
