@@ -24,6 +24,10 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
     private const double CapsulePaddingXDip = 14;
     private const double CapsulePaddingYDip = 6;
 
+    // A layered window passes clicks on fully transparent pixels through to the window behind it (the taskbar), so
+    // "Transparent" would leave only the glyphs clickable. Alpha 1/255 is invisible but catches clicks everywhere.
+    private static readonly Brush HitTestableClear = Frozen(Color.FromArgb(0x01, 0, 0, 0));
+
     private readonly ThemeColors _theme;
     private readonly IdleTracker _idle = new();
     private readonly StripViewModel _vm = new();
@@ -122,6 +126,11 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
             PInvoke.SetWindowPos(hwnd, HWND.Null, b.X, b.Y, b.Width, b.Height,
                 SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE);
         }
+
+        // The width above comes from the taskbar's DPI; WPF lays the text out at the window's own DPI. If those
+        // differ, text is clipped, so record both whenever the placement changes.
+        App.Log.Info($"Strip placed: {placement.Mode} {b.Width}x{b.Height} px at ({b.X}, {b.Y}); " +
+                     $"taskbar DPI scale {placement.DpiScale:0.###}, WPF DPI scale {VisualTreeHelper.GetDpi(this).DpiScaleX:0.###}");
 
         _placed = true;
         if (!_hidden && !IsVisible) base.Show();
@@ -232,7 +241,7 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         }
         else
         {
-            Root.Background = Brushes.Transparent;   // keep the whole strip hit-testable
+            Root.Background = HitTestableClear;
             Root.BorderBrush = Brushes.Transparent;
         }
     }
