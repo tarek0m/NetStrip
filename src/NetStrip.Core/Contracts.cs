@@ -91,7 +91,11 @@ public interface ISampleSource
     bool Paused { get; set; }
 }
 
-public enum StripMode { Full, Compact, Floating }
+/// <summary>
+/// Full: two lines on a horizontal taskbar. Compact: one line when Full would overlap the app buttons. Floating: the
+/// fallback pill. Vertical: side taskbars, upload above download with each unit under its number.
+/// </summary>
+public enum StripMode { Full, Compact, Floating, Vertical }
 public readonly record struct PixelRect(int X, int Y, int Width, int Height);
 public sealed record StripPlacement(nint ParentHwnd, PixelRect Bounds, StripMode Mode, double DpiScale);
 

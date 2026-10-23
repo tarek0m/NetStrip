@@ -82,7 +82,7 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
 - Create one strip window per enabled taskbar (setting `monitors`: `primary` default, or `all`). Window is a WPF `Window` with `WindowStyle=None`, `AllowsTransparency=True`, `ShowInTaskbar=False`, `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE`, then `SetParent` into the taskbar handle.
 - Height = taskbar height; width = fixed width measured for `"999.9 MB/s"` in the current font/DPI (+ arrow glyph + padding).
 - Position: immediately left of `TrayNotifyWnd` on the primary taskbar; on secondary taskbars, left of the clock area if present, else right edge minus padding.
-- Vertical/side taskbars (Windows 10 only): stack lines and fit width to taskbar width; if width < required, use compact mode.
+- Vertical/side taskbars (Windows 10, or Windows 11 with a taskbar tool): vertical mode, upload above download, each speed's unit on its own smaller line under the number (`↑ 2.47` / `Mb/s` / `↓ 9.62` / `Mb/s`), centred just above the tray. If the taskbar is narrower than that, scale it down uniformly to fit; never fall back to the one-line compact mode, which is wider.
 
 ### React
 

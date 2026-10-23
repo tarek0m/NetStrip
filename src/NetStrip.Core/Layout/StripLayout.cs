@@ -11,12 +11,14 @@ public static class StripLayout
 {
     /// <summary>
     /// Places the strip on the taskbar. Sizes are physical pixels as returned by <c>IStripSurface.Measure</c>
-    /// (already DPI-scaled). The returned bounds are relative to the taskbar's top-left corner.
+    /// (already DPI-scaled): <paramref name="full"/> and <paramref name="compact"/> are used on horizontal taskbars,
+    /// <paramref name="vertical"/> on side taskbars. The returned bounds are relative to the taskbar's top-left corner.
     /// </summary>
-    public static (PixelRect Bounds, StripMode Mode) Place(TaskbarGeometry g, (int W, int H) full, (int W, int H) compact, int paddingPx)
+    public static (PixelRect Bounds, StripMode Mode) Place(TaskbarGeometry g, (int W, int H) full, (int W, int H) compact,
+        (int W, int H) vertical, int paddingPx)
     {
         var (screen, mode) = IsVertical(g.Edge)
-            ? PlaceVertical(g, full, compact, paddingPx)
+            ? PlaceVertical(g, vertical, paddingPx)
             : PlaceHorizontal(g, full, compact, paddingPx);
         return (screen with { X = screen.X - g.Taskbar.X, Y = screen.Y - g.Taskbar.Y }, mode);
     }
@@ -76,12 +78,19 @@ public static class StripLayout
         return (fullRect, StripMode.Full);
     }
 
-    private static (PixelRect Screen, StripMode Mode) PlaceVertical(TaskbarGeometry g, (int W, int H) full, (int W, int H) compact, int padding)
+    /// <summary>
+    /// Centred on the side taskbar, just above the tray. Wider than the taskbar allows → scaled down uniformly (the
+    /// surface's content scales with it), so it always fits.
+    /// </summary>
+    private static (PixelRect Screen, StripMode Mode) PlaceVertical(TaskbarGeometry g, (int W, int H) natural, int padding)
     {
-        var (size, mode) = full.W <= g.Taskbar.Width - 2 * padding ? (full, StripMode.Full) : (compact, StripMode.Compact);
+        var available = Math.Max(1, g.Taskbar.Width - 2 * padding);
+        var (w, h) = natural.W <= available
+            ? natural
+            : (available, Math.Max(1, (int)Math.Round(natural.H * (double)available / natural.W)));
         var bottom = (g.Tray is { } tray ? tray.Y : Bottom(g.Taskbar)) - padding;
-        var x = g.Taskbar.X + (g.Taskbar.Width - size.W) / 2;
-        return (new PixelRect(x, bottom - size.H, size.W, size.H), mode);
+        var x = g.Taskbar.X + (g.Taskbar.Width - w) / 2;
+        return (new PixelRect(x, bottom - h, w, h), StripMode.Vertical);
     }
 
     private static int Right(PixelRect r) => r.X + r.Width;

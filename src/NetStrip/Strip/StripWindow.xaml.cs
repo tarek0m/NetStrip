@@ -26,6 +26,11 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
     private const double ArrowGapDip = 6;               // the arrows' right margin in StripWindow.xaml
     private const double RoundingSlackDip = 1;          // layout rounding can take a fraction of a pixel per element
     private const string WidestSpeed = "999.9 MB/s";
+    private const double VerticalPaddingDip = 2;
+    private const double VerticalArrowGapDip = 3;       // the vertical arrows' right margin in StripWindow.xaml
+    private const double VerticalUnitGapDip = 3;        // the upload unit's bottom margin in StripWindow.xaml
+    private const string WidestNumber = "999.9";
+    private const string WidestUnit = "MB/s";
 
     // A layered window passes clicks on fully transparent pixels through to the window behind it (the taskbar), so
     // "Transparent" would leave only the glyphs clickable. Alpha 1/255 is invisible but catches clicks everywhere.
@@ -96,6 +101,11 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
             case StripMode.Floating:
                 return (Px(FullContentWidth() + HorizontalPaddingDip + 2 * CapsulePaddingXDip, dpiScale),
                         Px(2 * lineHeight + 2 * CapsulePaddingYDip, dpiScale));
+            case StripMode.Vertical:
+                // Natural size; StripLayout scales it down uniformly if the side taskbar is narrower.
+                var unitHeight = MeasureText(WidestUnit, CompactFontSizeDip, out _).Height;
+                return (Px(VerticalContentWidth() + 2 * VerticalPaddingDip, dpiScale),
+                        Px(2 * (lineHeight + unitHeight) + VerticalUnitGapDip + 2 * VerticalPaddingDip, dpiScale));
             default:
                 return (Px(FullContentWidth() + HorizontalPaddingDip, dpiScale), taskbarThickness);
         }
@@ -107,6 +117,15 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         MeasureText("↓", BaseFontSizeDip, out var arrow);
         MeasureText(WidestSpeed, BaseFontSizeDip, out var speed);
         return arrow + ArrowGapDip + speed + RoundingSlackDip;
+    }
+
+    /// <summary>Mirrors VerticalGrid: arrow column (glyph + gap), then the wider of the widest number and unit.</summary>
+    private double VerticalContentWidth()
+    {
+        MeasureText("↓", BaseFontSizeDip, out var arrow);
+        MeasureText(WidestNumber, BaseFontSizeDip, out var number);
+        MeasureText(WidestUnit, CompactFontSizeDip, out var unit);
+        return arrow + VerticalArrowGapDip + Math.Max(number, unit) + RoundingSlackDip;
     }
 
     public void Apply(StripPlacement placement)
@@ -147,17 +166,14 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         if (!_hidden && !IsVisible) base.Show();
     }
 
-    /// <summary>Current outer bounds in screen pixels.</summary>
-    public PixelRect ScreenBounds
-    {
-        get
-        {
-            var dpi = VisualTreeHelper.GetDpi(this);
-            var origin = PointToScreen(new Point(0, 0));
-            return new PixelRect((int)Math.Round(origin.X), (int)Math.Round(origin.Y),
-                (int)Math.Round(ActualWidth * dpi.DpiScaleX), (int)Math.Round(ActualHeight * dpi.DpiScaleY));
-        }
-    }
+    /// <summary>
+    /// Current outer bounds in screen pixels, from the HWND itself: WPF's ActualWidth stays at the system minimum
+    /// window width (see <see cref="FitContentToWindow"/>), which put the flyout beside a strip that wasn't there.
+    /// </summary>
+    public PixelRect ScreenBounds =>
+        PInvoke.GetWindowRect(new HWND(_handle), out var r)
+            ? new PixelRect(r.left, r.top, r.right - r.left, r.bottom - r.top)
+            : default;
 
     public void SetHidden(bool hidden)
     {
@@ -181,8 +197,16 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
 
         var changes = _vm.Update(s, today, units);
 
-        if ((changes & StripViewModel.Changes.Up) != 0) UpValue.Text = _vm.UpText;
-        if ((changes & StripViewModel.Changes.Down) != 0) DownValue.Text = _vm.DownText;
+        if ((changes & StripViewModel.Changes.Up) != 0)
+        {
+            UpValue.Text = _vm.UpText;
+            (VerticalUpNumber.Text, VerticalUpUnit.Text) = StripViewModel.Split(_vm.UpText);
+        }
+        if ((changes & StripViewModel.Changes.Down) != 0)
+        {
+            DownValue.Text = _vm.DownText;
+            (VerticalDownNumber.Text, VerticalDownUnit.Text) = StripViewModel.Split(_vm.DownText);
+        }
         if ((changes & StripViewModel.Changes.Compact) != 0)
         {
             CompactDownRun.Text = _vm.CompactDown;
@@ -235,14 +259,17 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
     {
         _mode = mode;
         var compact = mode == StripMode.Compact;
-        FullLayout.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        var vertical = mode == StripMode.Vertical;
+        FullLayout.Visibility = compact || vertical ? Visibility.Collapsed : Visibility.Visible;
         CompactLayout.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
+        VerticalLayout.Visibility = vertical ? Visibility.Visible : Visibility.Collapsed;
+        if (vertical) VerticalGrid.Width = VerticalContentWidth();
 
         var floating = mode == StripMode.Floating;
-        Inner.Margin = floating
-            ? new Thickness(CapsulePaddingXDip, CapsulePaddingYDip, CapsulePaddingXDip, CapsulePaddingYDip)
+        Inner.Margin = floating ? new Thickness(CapsulePaddingXDip, CapsulePaddingYDip, CapsulePaddingXDip, CapsulePaddingYDip)
             : compact ? new Thickness(CompactPaddingDip / 2, 0, CompactPaddingDip / 2, 0)
-                      : new Thickness(HorizontalPaddingDip / 2, 0, HorizontalPaddingDip / 2, 0);
+            : vertical ? new Thickness(VerticalPaddingDip)
+            : new Thickness(HorizontalPaddingDip / 2, 0, HorizontalPaddingDip / 2, 0);
         Root.BorderThickness = new Thickness(floating ? 1 : 0);
         Root.CornerRadius = new CornerRadius(floating ? 100 : 0);   // clamped to half the height by the border
         ApplyCapsuleBrushes();
@@ -257,10 +284,16 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         DownValue.Foreground = number;
         CompactDownRun.Foreground = number;
         CompactUpRun.Foreground = number;
+        VerticalUpNumber.Foreground = number;
+        VerticalUpUnit.Foreground = number;
+        VerticalDownNumber.Foreground = number;
+        VerticalDownUnit.Foreground = number;
         UpArrow.Foreground = _theme.UploadBrush;
         CompactUpArrow.Foreground = _theme.UploadBrush;
+        VerticalUpArrow.Foreground = _theme.UploadBrush;
         DownArrow.Foreground = _theme.DownloadBrush;
         CompactDownArrow.Foreground = _theme.DownloadBrush;
+        VerticalDownArrow.Foreground = _theme.DownloadBrush;
         ApplyCapsuleBrushes();
     }
 

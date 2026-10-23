@@ -65,7 +65,8 @@ internal sealed class StripViewModel
         return changes;
     }
 
-    private static (string Number, string Unit) Split(string speed)
+    /// <summary>"1.20 MB/s" → ("1.20", "MB/s").</summary>
+    internal static (string Number, string Unit) Split(string speed)
     {
         var i = speed.LastIndexOf(' ');
         return (speed[..i], speed[(i + 1)..]);

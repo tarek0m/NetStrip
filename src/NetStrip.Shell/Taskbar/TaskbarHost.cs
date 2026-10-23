@@ -395,10 +395,12 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
         _probeResults.TryGetValue(located.Hwnd, out var probe);
         g = g with { TaskList = probe.TaskList, Tray = g.Tray ?? probe.ClockArea };
 
-        var thickness = StripLayout.IsVertical(g.Edge) ? g.Taskbar.Width : g.Taskbar.Height;
-        var full = attachment.Surface.Measure(StripMode.Full, g.DpiScale, thickness);
-        var compact = attachment.Surface.Measure(StripMode.Compact, g.DpiScale, thickness);
-        var (bounds, mode) = StripLayout.Place(g, full, compact, Padding(g.DpiScale));
+        var vertical = StripLayout.IsVertical(g.Edge);
+        var thickness = vertical ? g.Taskbar.Width : g.Taskbar.Height;
+        (int, int) Size(StripMode m) => attachment.Surface.Measure(m, g.DpiScale, thickness);
+        var (bounds, mode) = vertical
+            ? StripLayout.Place(g, default, default, Size(StripMode.Vertical), Padding(g.DpiScale))
+            : StripLayout.Place(g, Size(StripMode.Full), Size(StripMode.Compact), default, Padding(g.DpiScale));
 
         var screen = bounds with { X = bounds.X + g.Taskbar.X, Y = bounds.Y + g.Taskbar.Y };
         var stillOverlaps = mode == StripMode.Compact && g.TaskList is { } list && StripLayout.Intersects(screen, list);

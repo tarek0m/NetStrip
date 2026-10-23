@@ -7,6 +7,7 @@ public class StripLayoutTests
     private const int Padding = 4;
     private static readonly (int W, int H) Full = (90, 40);
     private static readonly (int W, int H) Compact = (60, 20);
+    private static readonly (int W, int H) Vertical = (44, 70);
 
     // 1920x1080 monitor, 48 px bottom taskbar, tray on the right.
     private static readonly PixelRect BottomTaskbar = new(0, 1040, 1920, 48);
@@ -17,7 +18,7 @@ public class StripLayoutTests
     {
         var g = new TaskbarGeometry(BottomTaskbar, BottomTray, new PixelRect(600, 1040, 700, 48), TaskbarEdge.Bottom, 1.0);
 
-        var (bounds, mode) = StripLayout.Place(g, Full, Compact, Padding);
+        var (bounds, mode) = StripLayout.Place(g, Full, Compact, Vertical, Padding);
 
         // Right edge = tray left - padding = 1696 (screen) -> x = 1606; vertically centred: (48 - 40) / 2 = 4.
         Assert.Equal(StripMode.Full, mode);
@@ -29,7 +30,7 @@ public class StripLayoutTests
     {
         var g = new TaskbarGeometry(new PixelRect(0, 0, 1920, 48), new PixelRect(1700, 0, 220, 48), null, TaskbarEdge.Top, 1.0);
 
-        var (bounds, mode) = StripLayout.Place(g, Full, Compact, Padding);
+        var (bounds, mode) = StripLayout.Place(g, Full, Compact, Vertical, Padding);
 
         Assert.Equal(StripMode.Full, mode);
         Assert.Equal(new PixelRect(1606, 4, 90, 40), bounds);
@@ -41,7 +42,7 @@ public class StripLayoutTests
         // Secondary taskbar on a monitor to the right of the primary one.
         var g = new TaskbarGeometry(new PixelRect(1920, 1040, 1920, 48), null, null, TaskbarEdge.Bottom, 1.0);
 
-        var (bounds, mode) = StripLayout.Place(g, Full, Compact, Padding);
+        var (bounds, mode) = StripLayout.Place(g, Full, Compact, Vertical, Padding);
 
         // Right edge = taskbar right - padding = 3836 (screen) -> x = 3746 screen = 1826 relative.
         Assert.Equal(StripMode.Full, mode);
@@ -54,7 +55,7 @@ public class StripLayoutTests
         // App buttons end at 1620; the full strip would span 1606..1696.
         var g = new TaskbarGeometry(BottomTaskbar, BottomTray, new PixelRect(500, 1040, 1120, 48), TaskbarEdge.Bottom, 1.0);
 
-        var (bounds, mode) = StripLayout.Place(g, Full, Compact, Padding);
+        var (bounds, mode) = StripLayout.Place(g, Full, Compact, Vertical, Padding);
 
         // Compact positioned the same way: right edge 1696 -> x = 1636; y = (48 - 20) / 2 = 14.
         Assert.Equal(StripMode.Compact, mode);
@@ -67,7 +68,7 @@ public class StripLayoutTests
         // App buttons end at 1680, overlapping even the compact strip (1636..1696).
         var g = new TaskbarGeometry(BottomTaskbar, BottomTray, new PixelRect(500, 1040, 1180, 48), TaskbarEdge.Bottom, 1.0);
 
-        var (bounds, mode) = StripLayout.Place(g, Full, Compact, Padding);
+        var (bounds, mode) = StripLayout.Place(g, Full, Compact, Vertical, Padding);
 
         Assert.Equal(StripMode.Compact, mode);
         Assert.Equal(new PixelRect(1636, 14, 60, 20), bounds);
@@ -79,35 +80,45 @@ public class StripLayoutTests
         // App buttons end exactly where the full strip starts (1606): edges touching is not an overlap.
         var g = new TaskbarGeometry(BottomTaskbar, BottomTray, new PixelRect(500, 1040, 1106, 48), TaskbarEdge.Bottom, 1.0);
 
-        var (_, mode) = StripLayout.Place(g, Full, Compact, Padding);
+        var (_, mode) = StripLayout.Place(g, Full, Compact, Vertical, Padding);
 
         Assert.Equal(StripMode.Full, mode);
     }
 
     [Fact]
-    public void Vertical_TooNarrow_Compact()
+    public void Vertical_Fits_NaturalSize_CentredAboveTray()
     {
-        // 62 px left taskbar: full width 90 > 62 - 2*4 = 54.
+        // 62 px left taskbar: 44 <= 62 - 2*4 = 54.
         var g = new TaskbarGeometry(new PixelRect(0, 0, 62, 1040), new PixelRect(0, 900, 62, 140), null, TaskbarEdge.Left, 1.0);
-        var compact = (W: 50, H: 20);
 
-        var (bounds, mode) = StripLayout.Place(g, Full, compact, Padding);
+        var (bounds, mode) = StripLayout.Place(g, Full, Compact, Vertical, Padding);
 
-        // Directly above the tray: bottom = 900 - 4 = 896 -> y = 876; centred horizontally: (62 - 50) / 2 = 6.
-        Assert.Equal(StripMode.Compact, mode);
-        Assert.Equal(new PixelRect(6, 876, 50, 20), bounds);
+        // Directly above the tray: bottom = 900 - 4 = 896 -> y = 826; centred horizontally: (62 - 44) / 2 = 9.
+        Assert.Equal(StripMode.Vertical, mode);
+        Assert.Equal(new PixelRect(9, 826, 44, 70), bounds);
     }
 
     [Fact]
-    public void Vertical_WideEnough_Full()
+    public void Vertical_TooNarrow_ScalesDownUniformly()
     {
-        // 100 px right taskbar at x = 1820: full width 90 <= 100 - 8 = 92.
-        var g = new TaskbarGeometry(new PixelRect(1820, 0, 100, 1080), new PixelRect(1820, 900, 100, 180), null, TaskbarEdge.Right, 1.0);
+        // 48 px right taskbar at x = 1872: available 48 - 8 = 40 < 44, so 40 x round(70 * 40 / 44) = 40 x 64.
+        var g = new TaskbarGeometry(new PixelRect(1872, 0, 48, 1080), new PixelRect(1872, 900, 48, 180), null, TaskbarEdge.Right, 1.0);
 
-        var (bounds, mode) = StripLayout.Place(g, Full, Compact, Padding);
+        var (bounds, mode) = StripLayout.Place(g, Full, Compact, Vertical, Padding);
 
-        Assert.Equal(StripMode.Full, mode);
-        Assert.Equal(new PixelRect(5, 856, 90, 40), bounds);
+        Assert.Equal(StripMode.Vertical, mode);
+        Assert.Equal(new PixelRect(4, 832, 40, 64), bounds);
+    }
+
+    [Fact]
+    public void Vertical_NeverUsesFullOrCompact_EvenWhenWideEnough()
+    {
+        // Upload above download on side taskbars, however wide they are.
+        var g = new TaskbarGeometry(new PixelRect(0, 0, 200, 1080), new PixelRect(0, 900, 200, 180), null, TaskbarEdge.Left, 1.0);
+
+        var (_, mode) = StripLayout.Place(g, Full, Compact, Vertical, Padding);
+
+        Assert.Equal(StripMode.Vertical, mode);
     }
 
     [Fact]
@@ -115,9 +126,9 @@ public class StripLayoutTests
     {
         var g = new TaskbarGeometry(new PixelRect(0, 0, 100, 1080), null, null, TaskbarEdge.Left, 1.0);
 
-        var (bounds, _) = StripLayout.Place(g, Full, Compact, Padding);
+        var (bounds, _) = StripLayout.Place(g, Full, Compact, Vertical, Padding);
 
-        Assert.Equal(new PixelRect(5, 1036, 90, 40), bounds);
+        Assert.Equal(new PixelRect(28, 1006, 44, 70), bounds);
     }
 
     [Fact]
@@ -126,7 +137,7 @@ public class StripLayoutTests
         // At 150 % the surface already measured in physical pixels; layout must not scale again.
         var g = new TaskbarGeometry(new PixelRect(0, 1032, 1920, 72), new PixelRect(1600, 1032, 320, 72), null, TaskbarEdge.Bottom, 1.5);
 
-        var (bounds, mode) = StripLayout.Place(g, (135, 60), (90, 30), paddingPx: 6);
+        var (bounds, mode) = StripLayout.Place(g, (135, 60), (90, 30), Vertical, paddingPx: 6);
 
         Assert.Equal(StripMode.Full, mode);
         Assert.Equal(new PixelRect(1600 - 6 - 135, 6, 135, 60), bounds);

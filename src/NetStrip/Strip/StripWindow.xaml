@@ -55,6 +55,31 @@
                      HorizontalAlignment="Right" VerticalAlignment="Center">
                 <TextBlock TextWrapping="NoWrap" FontSize="10"><Run x:Name="CompactDownArrow" Text="↓" /><Run x:Name="CompactDownRun" /><Run Text=" " /><Run x:Name="CompactUpArrow" Text="↑" /><Run x:Name="CompactUpRun" /></TextBlock>
             </Viewbox>
+            <!-- Vertical (side taskbars): upload above download, each unit under its number. VerticalGrid has a fixed
+                 width (set in code) so the Viewbox scale stays constant as digits change; it only ever shrinks. -->
+            <Viewbox x:Name="VerticalLayout" Visibility="Collapsed" Stretch="Uniform" StretchDirection="DownOnly"
+                     HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Grid x:Name="VerticalGrid">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="VerticalUpArrow" Grid.Row="0" Grid.Column="0" Text="↑" Margin="0,0,3,0" />
+                    <TextBlock x:Name="VerticalUpNumber" Grid.Row="0" Grid.Column="1" TextAlignment="Right" HorizontalAlignment="Right" />
+                    <TextBlock x:Name="VerticalUpUnit" Grid.Row="1" Grid.Column="1" FontSize="10" Margin="0,0,0,3"
+                               TextAlignment="Right" HorizontalAlignment="Right" />
+                    <TextBlock x:Name="VerticalDownArrow" Grid.Row="2" Grid.Column="0" Text="↓" Margin="0,0,3,0" />
+                    <TextBlock x:Name="VerticalDownNumber" Grid.Row="2" Grid.Column="1" TextAlignment="Right" HorizontalAlignment="Right" />
+                    <TextBlock x:Name="VerticalDownUnit" Grid.Row="3" Grid.Column="1" FontSize="10"
+                               TextAlignment="Right" HorizontalAlignment="Right" />
+                </Grid>
+            </Viewbox>
         </Grid>
     </Border>
 </Window>
