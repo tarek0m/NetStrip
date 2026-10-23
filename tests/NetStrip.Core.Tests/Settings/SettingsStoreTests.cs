@@ -25,7 +25,7 @@ public class SettingsStoreTests
 
         Assert.Same(settings, store.Current);
         Assert.Equal(1, settings.Version);
-        Assert.Equal(SpeedUnits.Bytes, settings.Units);
+        Assert.Equal(SpeedUnits.Bits, settings.Units);
         Assert.Equal("auto", settings.Adapter);
         Assert.Equal(MonitorScope.Primary, settings.Monitors);
         Assert.True(settings.StartWithWindows);
@@ -44,14 +44,14 @@ public class SettingsStoreTests
     [Fact]
     public void Current_BeforeLoad_IsDefaults()
     {
-        Assert.Equal(SpeedUnits.Bytes, Create().Current.Units);
+        Assert.Equal(SpeedUnits.Bits, Create().Current.Units);
     }
 
     [Fact]
     public void Load_ParsesSpecKeys_AsCamelCaseStrings()
     {
         _fs.Files[Path] = """
-            { "version": 1, "units": "bits", "adapter": "11ca5483-84b1-4a07-8773-a98917aee6a8", "monitors": "all",
+            { "version": 1, "units": "bytes", "adapter": "11ca5483-84b1-4a07-8773-a98917aee6a8", "monitors": "all",
               "startWithWindows": false, "hideInFullscreen": false, "idleFade": false, "theme": "dark",
               "capGb": 50.5, "capResetDay": 15, "capAdapter": "all", "checkForUpdates": false,
               "floatingPosition": { "x": 120, "y": -40 } }
@@ -59,7 +59,7 @@ public class SettingsStoreTests
 
         var s = Create().Load();
 
-        Assert.Equal(SpeedUnits.Bits, s.Units);
+        Assert.Equal(SpeedUnits.Bytes, s.Units);
         Assert.Equal("11ca5483-84b1-4a07-8773-a98917aee6a8", s.Adapter);
         Assert.Equal(MonitorScope.All, s.Monitors);
         Assert.False(s.StartWithWindows);
@@ -79,7 +79,7 @@ public class SettingsStoreTests
         store.Load();
         store.Update(s =>
         {
-            s.Units = SpeedUnits.Bits;
+            s.Units = SpeedUnits.Bytes;
             s.Theme = ThemeSetting.Light;
             s.Monitors = MonitorScope.All;
             s.CapGb = 10;
@@ -87,7 +87,7 @@ public class SettingsStoreTests
         });
 
         var root = JsonDocument.Parse(_fs.Files[Path]).RootElement;
-        Assert.Equal("bits", root.GetProperty("units").GetString());
+        Assert.Equal("bytes", root.GetProperty("units").GetString());
         Assert.Equal("light", root.GetProperty("theme").GetString());
         Assert.Equal("all", root.GetProperty("monitors").GetString());
         Assert.Equal("auto", root.GetProperty("adapter").GetString());
@@ -101,7 +101,7 @@ public class SettingsStoreTests
     [Fact]
     public void Roundtrip_PreservesUnknownFields()
     {
-        _fs.Files[Path] = """{ "units": "bits", "futureFlag": true, "futureObject": { "a": [1, 2, 3] }, "futureText": "hi" }""";
+        _fs.Files[Path] = """{ "units": "bytes", "futureFlag": true, "futureObject": { "a": [1, 2, 3] }, "futureText": "hi" }""";
         var store = Create();
         store.Load();
 
@@ -111,7 +111,7 @@ public class SettingsStoreTests
         Assert.True(root.GetProperty("futureFlag").GetBoolean());
         Assert.Equal(3, root.GetProperty("futureObject").GetProperty("a").GetArrayLength());
         Assert.Equal("hi", root.GetProperty("futureText").GetString());
-        Assert.Equal("bits", root.GetProperty("units").GetString());
+        Assert.Equal("bytes", root.GetProperty("units").GetString());
         Assert.Equal("dark", root.GetProperty("theme").GetString());
 
         var reloaded = Create().Load();
@@ -134,7 +134,7 @@ public class SettingsStoreTests
         var move = Assert.Single(_fs.Moves);
         Assert.Equal(Path, move.From);
         Assert.Equal(Path + ".bad-20261023120000", move.To);
-        Assert.Equal(SpeedUnits.Bytes, s.Units);
+        Assert.Equal(SpeedUnits.Bits, s.Units);
         Assert.Equal("auto", s.Adapter);
         Assert.Same(s, store.Current);
         Assert.NotEmpty(_log.Warnings.Concat(_log.Errors));
@@ -148,24 +148,24 @@ public class SettingsStoreTests
 
         var s = store.Load();
 
-        Assert.Equal(SpeedUnits.Bytes, s.Units);
+        Assert.Equal(SpeedUnits.Bits, s.Units);
         Assert.NotEmpty(_log.Errors);
     }
 
     [Fact]
     public void BrieflyLockedFile_IsReadAfterRetry()
     {
-        _fs.Files[Path] = """{ "units": "bits" }""";
+        _fs.Files[Path] = """{ "units": "bytes" }""";
         _fs.FailingReads = 2;
 
-        Assert.Equal(SpeedUnits.Bits, Create().Load().Units);
+        Assert.Equal(SpeedUnits.Bytes, Create().Load().Units);
         Assert.Empty(_fs.Moves);
     }
 
     [Fact]
     public void LockedFile_UsesDefaults_WithoutBackingUpOrOverwritingIt()
     {
-        var original = """{ "units": "bits" }""";
+        var original = """{ "units": "bytes" }""";
         _fs.Files[Path] = original;
         _fs.FailingReads = 100;
         var store = Create();
@@ -173,7 +173,7 @@ public class SettingsStoreTests
         var s = store.Load();
         store.Update(x => x.IdleFade = false);
 
-        Assert.Equal(SpeedUnits.Bytes, s.Units);
+        Assert.Equal(SpeedUnits.Bits, s.Units);
         Assert.False(store.Current.IdleFade);    // the change still applies for this session
         Assert.Empty(_fs.Moves);
         Assert.Empty(_fs.AtomicWrites);
@@ -215,14 +215,14 @@ public class SettingsStoreTests
         var raised = new List<AppSettings>();
         store.Changed += raised.Add;
 
-        store.Update(s => s.Units = SpeedUnits.Bits);
+        store.Update(s => s.Units = SpeedUnits.Bytes);
 
         var changed = Assert.Single(raised);
         Assert.Same(store.Current, changed);
-        Assert.Equal(SpeedUnits.Bits, changed.Units);
+        Assert.Equal(SpeedUnits.Bytes, changed.Units);
         var write = Assert.Single(_fs.AtomicWrites);
         Assert.Equal(Path, write.Path);
-        Assert.Equal("bits", JsonDocument.Parse(write.Contents).RootElement.GetProperty("units").GetString());
+        Assert.Equal("bytes", JsonDocument.Parse(write.Contents).RootElement.GetProperty("units").GetString());
     }
 
     [Fact]
@@ -231,10 +231,10 @@ public class SettingsStoreTests
         var store = Create();
         var before = store.Load();
 
-        store.Update(s => s.Units = SpeedUnits.Bits);
+        store.Update(s => s.Units = SpeedUnits.Bytes);
 
-        Assert.Equal(SpeedUnits.Bytes, before.Units);
-        Assert.Equal(SpeedUnits.Bits, store.Current.Units);
+        Assert.Equal(SpeedUnits.Bits, before.Units);
+        Assert.Equal(SpeedUnits.Bytes, store.Current.Units);
     }
 
     [Fact]

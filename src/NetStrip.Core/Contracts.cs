@@ -22,7 +22,7 @@ public sealed record UpdateInfo(Version Version, Uri ReleaseUrl);
 public sealed class AppSettings
 {
     public int Version { get; set; } = 1;
-    public SpeedUnits Units { get; set; } = SpeedUnits.Bytes;
+    public SpeedUnits Units { get; set; } = SpeedUnits.Bits;
     public string Adapter { get; set; } = AdapterIds.Auto;
     public MonitorScope Monitors { get; set; } = MonitorScope.Primary;
     public bool StartWithWindows { get; set; } = true;
