@@ -23,7 +23,7 @@ A minimal Windows network speed monitor. NetStrip shows live upload and download
 Download the latest build from the [Releases page](https://github.com/tarek0m/NetStrip/releases).
 
 - `NetStrip-<version>-setup-x64.exe`: per-user installer. It installs to `%LocalAppData%\Programs\NetStrip`, adds an optional "Start with Windows" setting, and uninstalls cleanly, including the startup entry.
-- `NetStrip-<version>-portable-x64.zip` and `NetStrip-<version>-portable-arm64.zip`: single-file, self-contained `NetStrip.exe`. Extract and run.
+- `NetStrip-<version>-portable-x64.zip` and `NetStrip-<version>-portable-arm64.zip`: single-file, self-contained `NetStrip.exe`. Extract and run. On an Arm64 PC, use the arm64 zip: the installer is x64 only.
 
 ### SmartScreen warning
 
@@ -50,6 +50,13 @@ Projects:
 ## Releases
 
 Push an annotated `vMAJOR.MINOR.PATCH` tag. The annotation becomes the release notes. GitHub Actions runs the tests, builds the installer and portable zips, and attaches them to a new release. Tags with a `-` suffix are published as pre-releases.
+
+```powershell
+git tag -a v0.1.0 -m "First release: ..."
+git push origin v0.1.0
+```
+
+To try the pipeline without publishing anything, run the **Release** workflow by hand (Actions → Release → Run workflow). It builds the same installer and zips, versioned `0.0.0-dev.<run>`, and attaches them to the workflow run as an artifact instead of creating a release.
 
 The manual test checklist for each release is in [docs/manual-test-checklist.md](docs/manual-test-checklist.md).
 

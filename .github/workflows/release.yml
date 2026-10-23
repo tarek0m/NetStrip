@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"
+  # Dry run from the Actions tab: builds the installer and zips as workflow artifacts, creates no release.
+  workflow_dispatch:
 
 jobs:
   release:
@@ -24,7 +26,11 @@ jobs:
       - name: Derive version from tag
         shell: bash
         run: |
-          ver="${GITHUB_REF_NAME#v}"
+          if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
+            ver="0.0.0-dev.$GITHUB_RUN_NUMBER"   # dry run
+          else
+            ver="${GITHUB_REF_NAME#v}"
+          fi
           if [[ ! "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "Tag '$GITHUB_REF_NAME' is not a version tag (expected vMAJOR.MINOR.PATCH)." >&2
             exit 1
@@ -64,11 +70,27 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "iscc failed ($LASTEXITCODE)" }
           Copy-Item "installer/Output/NetStrip-$ver-setup-x64.exe" -Destination artifacts/
 
+      - name: Upload dry-run artifacts
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: NetStrip-${{ env.VERSION }}
+          path: artifacts/*
+          if-no-files-found: error
+
       - name: Extract release notes from tag annotation
+        if: github.ref_type == 'tag'
         shell: bash
-        run: git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > release-notes.md
+        run: |
+          # actions/checkout can fetch the tag without its annotation; fetch it again so %(contents) is the message.
+          git fetch --force --tags origin
+          git tag -l --format='%(contents)' "$GITHUB_REF_NAME" > release-notes.md
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "NetStrip $VERSION" > release-notes.md
+          fi
 
       - name: Create GitHub release
+        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
