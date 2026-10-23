@@ -24,6 +24,7 @@ MinVersion=10.0.19041
 CloseApplications=yes
 AppMutex=Local\NetStrip
 UninstallDisplayIcon={app}\{#AppExe}
+SetupIconFile={#SourcePath}\..\src\NetStrip\Assets\NetStrip.ico
 UninstallDisplayName={#AppName}
 LicenseFile={#SourcePath}\..\LICENSE
 OutputDir={#SourcePath}\Output

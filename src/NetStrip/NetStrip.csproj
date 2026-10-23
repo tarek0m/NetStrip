@@ -7,6 +7,7 @@
     <!-- Pointer-sized window-long APIs exist only as arch-specific metadata; x64 and arm64 share the same Ptr signatures. -->
     <CsWin32PlatformTarget>x64</CsWin32PlatformTarget>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\NetStrip.ico</ApplicationIcon>
     <!-- Working-set budget (spec: ≤ 60 MB): no PGO instrumentation for an app that does a little work once a second. -->
     <TieredPGO>false</TieredPGO>
   </PropertyGroup>
@@ -23,6 +24,10 @@
   <ItemGroup>
     <!-- CsWin32 already adds the project-root NativeMethods.txt; this glob adds folder-level files exactly once. -->
     <AdditionalFiles Include="**\NativeMethods.txt" Exclude="NativeMethods.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Window icons (settings window title bar and taskbar button); the exe icon comes from ApplicationIcon. -->
+    <Resource Include="Assets\NetStrip.ico" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\NetStrip.Core\NetStrip.Core.csproj" />
