@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using NetStrip.Core;
 using NetStrip.Core.Presentation;
+using NetStrip.Platform;
 using NetStrip.Theme;
 using Windows.Win32;
 using Windows.Win32.Foundation;
@@ -29,6 +30,7 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
 
     private StripMode _mode = StripMode.Full;
     private bool _hidden;
+    private bool _placed;
     private bool _faded;
     private bool _stylesApplied;
     private bool _closed;
@@ -60,6 +62,15 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
 
     /// <summary>Raised when a floating-mode drag ends, with the new top-left in screen pixels.</summary>
     public event Action<PixelPoint>? FloatingMoved;
+
+    /// <summary>
+    /// The user's saved floating top-left (screen pixels). When set, Floating placements keep their size but use this
+    /// position, clamped into the work area of the nearest monitor, instead of the host's computed one (spec §6).
+    /// </summary>
+    public PixelPoint? FloatingPosition { get; set; }
+
+    /// <summary>Keeps the "Pause updates" menu check in sync when pausing happens elsewhere (another strip, a new window).</summary>
+    public void SetPaused(bool paused) => PauseItem.IsChecked = paused;
 
     // ---- IStripSurface ------------------------------------------------------------------------
 
@@ -94,6 +105,15 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         var b = placement.Bounds;
         if (floating)
         {
+            if (FloatingPosition is { } saved)
+            {
+                var work = Monitors.WorkAreaNear(new PixelRect(saved.X, saved.Y, b.Width, b.Height));
+                b = b with
+                {
+                    X = Math.Max(work.X, Math.Min(saved.X, work.X + work.Width - b.Width)),
+                    Y = Math.Max(work.Y, Math.Min(saved.Y, work.Y + work.Height - b.Height)),
+                };
+            }
             PInvoke.SetWindowPos(hwnd, HWND.HWND_TOPMOST, b.X, b.Y, b.Width, b.Height,
                 SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE);
         }
@@ -103,6 +123,7 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
                 SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE);
         }
 
+        _placed = true;
         if (!_hidden && !IsVisible) base.Show();
     }
 
@@ -125,7 +146,7 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         {
             if (IsVisible) Hide();
         }
-        else if (!IsVisible && _stylesApplied)
+        else if (!IsVisible && _stylesApplied && _placed)   // never show a window that has not been positioned yet
         {
             base.Show();
         }

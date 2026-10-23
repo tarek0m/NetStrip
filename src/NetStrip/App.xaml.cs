@@ -1,27 +1,19 @@
 using System.IO;
 using System.Windows;
-using System.Windows.Threading;
 using NetStrip.Core;
 using NetStrip.Core.Logging;
-using NetStrip.Fakes;
-using NetStrip.Theme;
 
 namespace NetStrip;
 
 public partial class App : Application
 {
     private IDisposable? _instanceHandle;
-    private FakeSession? _fake;
-    private ThemeColors? _theme;
+    private AppHost? _host;
 
     public static ILog Log { get; private set; } = null!;
-    public static bool FakeMode { get; private set; }
-    public static bool FloatingDebug { get; private set; }
 
     /// <summary>Raised on the UI thread when a second launch asks the running instance to open its flyout.</summary>
     public event Action? ActivationRequested;
-
-    public ThemeColors Theme => _theme!;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -32,8 +24,7 @@ public partial class App : Application
         Log = new FileLog(logDir, new SystemClock());
         InstallGlobalHandlers();
 
-        FakeMode = e.Args.Contains("--fake", StringComparer.OrdinalIgnoreCase);
-        FloatingDebug = e.Args.Contains("--floating", StringComparer.OrdinalIgnoreCase);
+        var fake = e.Args.Contains("--fake", StringComparer.OrdinalIgnoreCase);
 
         if (!SingleInstance.TryAcquire(out var handle))
         {
@@ -44,22 +35,32 @@ public partial class App : Application
         _instanceHandle = handle;
         SingleInstance.Activated += () => Dispatcher.BeginInvoke(() => ActivationRequested?.Invoke());
 
-        _theme = new ThemeColors();
-        _theme.StartListening();
-
-        Log.Info($"NetStrip starting (fake={FakeMode}, floating={FloatingDebug}).");
-
-        // Temporary wiring; Task 13 replaces this with AppHost composition.
-        if (FakeMode)
+        Log.Info($"NetStrip starting (fake={fake}).");
+        SessionEnding += (_, args) =>
         {
-            _fake = new FakeSession(this, _theme, FloatingDebug);
+            Log.Info($"Session ending ({args.ReasonSessionEnding}); saving usage.");
+            _host?.SaveUsage();
+        };
+
+        try
+        {
+            _host = new AppHost(this, Log, fake);
+            _host.Start();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Startup failed; exiting", ex);
+            Shutdown(1);
         }
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _fake?.Dispose();
-        _theme?.Dispose();
+        // Strips, sampler and usage save happen inside AppHost.Dispose, in that order.
+        _host?.Dispose();
+        _host = null;
+        // FileLog appends synchronously, so there is nothing buffered to flush; this is the last line written.
+        Log?.Info($"NetStrip exiting (code {e.ApplicationExitCode}).");
         try { _instanceHandle?.Dispose(); }
         catch (ApplicationException) { /* mutex not owned by this thread */ }
         base.OnExit(e);

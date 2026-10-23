@@ -22,6 +22,42 @@ internal static class Monitors
         return new PixelRect(w.left, w.top, w.right - w.left, w.bottom - w.top);
     }
 
+    /// <summary>
+    /// The taskbar edge of the monitor nearest to <paramref name="near"/>: the side where the work area is inset from
+    /// the monitor (the space the taskbar reserves). With an auto-hide taskbar nothing is reserved, so the monitor edge
+    /// closest to <paramref name="near"/>'s centre is used. Defaults to Bottom.
+    /// </summary>
+    public static TaskbarEdge TaskbarEdgeNear(PixelRect near)
+    {
+        var rect = new RECT { left = near.X, top = near.Y, right = near.X + near.Width, bottom = near.Y + near.Height };
+        var monitor = PInvoke.MonitorFromRect(rect, MONITOR_FROM_FLAGS.MONITOR_DEFAULTTONEAREST);
+        var info = new MONITORINFO { cbSize = (uint)Marshal.SizeOf<MONITORINFO>() };
+        if (!PInvoke.GetMonitorInfo(monitor, ref info)) return TaskbarEdge.Bottom;
+        var m = info.rcMonitor;
+        var w = info.rcWork;
+
+        var insets = new[]
+        {
+            (Edge: TaskbarEdge.Bottom, Size: m.bottom - w.bottom),
+            (Edge: TaskbarEdge.Top, Size: w.top - m.top),
+            (Edge: TaskbarEdge.Left, Size: w.left - m.left),
+            (Edge: TaskbarEdge.Right, Size: m.right - w.right),
+        };
+        var widest = insets.MaxBy(i => i.Size);
+        if (widest.Size > 0) return widest.Edge;
+
+        var cx = near.X + near.Width / 2;
+        var cy = near.Y + near.Height / 2;
+        var distances = new[]
+        {
+            (Edge: TaskbarEdge.Bottom, Size: m.bottom - cy),
+            (Edge: TaskbarEdge.Top, Size: cy - m.top),
+            (Edge: TaskbarEdge.Left, Size: cx - m.left),
+            (Edge: TaskbarEdge.Right, Size: m.right - cx),
+        };
+        return distances.MinBy(d => d.Size).Edge;
+    }
+
     /// <summary>DPI scale (1.0 = 96 dpi) of the monitor nearest to <paramref name="near"/>.</summary>
     public static double DpiScaleNear(PixelRect near)
     {
