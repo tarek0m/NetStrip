@@ -32,7 +32,7 @@ public partial class FlyoutWindow : Window
 
     private Sample? _last;
     private volatile bool _visibleFlag;
-    private bool _micaTried;
+    private bool _micaApplied;
     private int _noticesShown;
 
     public FlyoutWindow(ISampleSource source, GraphBuffer graph, IUsageQuery usage, ISettingsStore settings, ThemeColors theme)
@@ -65,12 +65,7 @@ public partial class FlyoutWindow : Window
     public void ShowAt(PixelRect stripScreenRect, TaskbarEdge edge)
     {
         var handle = new WindowInteropHelper(this).EnsureHandle();
-        if (!_micaTried)
-        {
-            _micaTried = true;
-            var mica = Mica.Apply(this);
-            App.Log.Info($"Flyout backdrop: {(mica ? "Mica" : "solid themed background")}");
-        }
+        UpdateBackdrop();
 
         RefreshAll();
 
@@ -140,7 +135,42 @@ public partial class FlyoutWindow : Window
         if (IsVisible) RefreshAll();
     }
 
-    private void OnThemeChanged() => ApplyGraphBrushes();
+    private void OnThemeChanged()
+    {
+        ApplyGraphBrushes();
+        if (_micaApplied) Mica.RefreshDarkMode(this);
+    }
+
+    /// <summary>
+    /// Backdrop state follows the OS live: Mica is applied once (skipped in high contrast, removed if high contrast
+    /// is turned on later), and the dark-mode tint is re-synced on every show so it never disagrees with the Fluent theme.
+    /// </summary>
+    private void UpdateBackdrop()
+    {
+        if (SystemParameters.HighContrast)
+        {
+            if (_micaApplied)
+            {
+                Mica.Remove(this);
+                _micaApplied = false;
+                App.Log.Info("Flyout backdrop: solid themed background (high contrast)");
+            }
+            return;
+        }
+
+        if (_micaApplied)
+        {
+            Mica.RefreshDarkMode(this);
+            return;
+        }
+
+        if (!Mica.IsSupported) return;
+        if (Mica.Apply(this))
+        {
+            _micaApplied = true;
+            App.Log.Info("Flyout backdrop: Mica");
+        }
+    }
 
     private void ApplyGraphBrushes()
     {
