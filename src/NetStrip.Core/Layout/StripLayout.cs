@@ -1,0 +1,89 @@
+namespace NetStrip.Core.Layout;
+
+/// <summary>
+/// One taskbar's geometry in physical screen pixels. <paramref name="Tray"/> is the notification area
+/// (or the clock area on secondary taskbars), <paramref name="TaskList"/> the app-button area; either may be unknown.
+/// </summary>
+public sealed record TaskbarGeometry(PixelRect Taskbar, PixelRect? Tray, PixelRect? TaskList, TaskbarEdge Edge, double DpiScale);
+
+/// <summary>Pure placement rules for the strip (spec §6).</summary>
+public static class StripLayout
+{
+    /// <summary>
+    /// Places the strip on the taskbar. Sizes are physical pixels as returned by <c>IStripSurface.Measure</c>
+    /// (already DPI-scaled). The returned bounds are relative to the taskbar's top-left corner.
+    /// </summary>
+    public static (PixelRect Bounds, StripMode Mode) Place(TaskbarGeometry g, (int W, int H) full, (int W, int H) compact, int paddingPx)
+    {
+        var (screen, mode) = IsVertical(g.Edge)
+            ? PlaceVertical(g, full, compact, paddingPx)
+            : PlaceHorizontal(g, full, compact, paddingPx);
+        return (screen with { X = screen.X - g.Taskbar.X, Y = screen.Y - g.Taskbar.Y }, mode);
+    }
+
+    /// <summary>Which monitor edge the taskbar sits on, from its rect relative to the monitor's.</summary>
+    public static TaskbarEdge EdgeOf(PixelRect taskbar, PixelRect monitor)
+    {
+        // Compare centres (doubled to stay in integers) so partially hidden (auto-hide) taskbars still classify.
+        if (taskbar.Width >= taskbar.Height)
+            return 2 * taskbar.Y + taskbar.Height < 2 * monitor.Y + monitor.Height ? TaskbarEdge.Top : TaskbarEdge.Bottom;
+        return 2 * taskbar.X + taskbar.Width < 2 * monitor.X + monitor.Width ? TaskbarEdge.Left : TaskbarEdge.Right;
+    }
+
+    /// <summary>
+    /// Screen rect for the floating pill: just inside the work area next to the taskbar, right-aligned with the tray
+    /// (or the work area) on horizontal taskbars, at the bottom beside vertical ones; clamped to the work area.
+    /// </summary>
+    public static PixelRect PlaceFloating(PixelRect workArea, PixelRect? tray, TaskbarEdge edge, (int W, int H) size, int paddingPx)
+    {
+        int x, y;
+        switch (edge)
+        {
+            case TaskbarEdge.Left:
+                x = workArea.X + paddingPx;
+                y = Bottom(workArea) - paddingPx - size.H;
+                break;
+            case TaskbarEdge.Right:
+                x = Right(workArea) - paddingPx - size.W;
+                y = Bottom(workArea) - paddingPx - size.H;
+                break;
+            default:
+                x = (tray is { } t ? Right(t) : Right(workArea)) - paddingPx - size.W;
+                y = edge == TaskbarEdge.Top ? workArea.Y + paddingPx : Bottom(workArea) - paddingPx - size.H;
+                break;
+        }
+
+        x = Math.Max(workArea.X, Math.Min(x, Right(workArea) - size.W));
+        y = Math.Max(workArea.Y, Math.Min(y, Bottom(workArea) - size.H));
+        return new PixelRect(x, y, size.W, size.H);
+    }
+
+    /// <summary>True when the rects share interior area (touching edges do not count).</summary>
+    public static bool Intersects(PixelRect a, PixelRect b) =>
+        a.X < Right(b) && b.X < Right(a) && a.Y < Bottom(b) && b.Y < Bottom(a);
+
+    public static bool IsVertical(TaskbarEdge edge) => edge is TaskbarEdge.Left or TaskbarEdge.Right;
+
+    private static (PixelRect Screen, StripMode Mode) PlaceHorizontal(TaskbarGeometry g, (int W, int H) full, (int W, int H) compact, int padding)
+    {
+        var right = (g.Tray is { } tray ? tray.X : Right(g.Taskbar)) - padding;
+        PixelRect At((int W, int H) size) =>
+            new(right - size.W, g.Taskbar.Y + (g.Taskbar.Height - size.H) / 2, size.W, size.H);
+
+        var fullRect = At(full);
+        if (g.TaskList is { } taskList && Intersects(fullRect, taskList))
+            return (At(compact), StripMode.Compact);   // even if compact still overlaps: stay compact, never hide
+        return (fullRect, StripMode.Full);
+    }
+
+    private static (PixelRect Screen, StripMode Mode) PlaceVertical(TaskbarGeometry g, (int W, int H) full, (int W, int H) compact, int padding)
+    {
+        var (size, mode) = full.W <= g.Taskbar.Width - 2 * padding ? (full, StripMode.Full) : (compact, StripMode.Compact);
+        var bottom = (g.Tray is { } tray ? tray.Y : Bottom(g.Taskbar)) - padding;
+        var x = g.Taskbar.X + (g.Taskbar.Width - size.W) / 2;
+        return (new PixelRect(x, bottom - size.H, size.W, size.H), mode);
+    }
+
+    private static int Right(PixelRect r) => r.X + r.Width;
+    private static int Bottom(PixelRect r) => r.Y + r.Height;
+}
