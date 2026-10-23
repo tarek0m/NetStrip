@@ -16,7 +16,10 @@
         Typography.NumeralAlignment="Tabular"
         SourceInitialized="OnSourceInitialized"
         Closed="OnClosed">
+    <!-- Width/Height are set from the HWND size in code (FitContentToWindow); top-left so it starts at the HWND origin. -->
     <Border x:Name="Root"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
             Background="#01000000"
             ToolTipService.InitialShowDelay="600"
             ToolTipService.ShowDuration="8000"
