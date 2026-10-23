@@ -39,4 +39,22 @@ public sealed class FileLogTests : IDisposable
         Assert.Equal("netstrip-2026-10-03.log", names[0]);
         Assert.Equal("netstrip-2026-10-09.log", names[^1]);
     }
+
+    [Fact]
+    public void DateRollover_PrunesWithoutRestart()
+    {
+        var clock = new FakeClock(new DateTimeOffset(2026, 10, 1, 12, 0, 0, TimeSpan.Zero));
+        var log = new FileLog(_dir, clock);
+
+        for (var day = 1; day <= 10; day++)
+        {
+            clock.Now = new DateTimeOffset(2026, 10, day, 12, 0, 0, TimeSpan.Zero);
+            log.Info($"day {day}");
+        }
+
+        var names = Directory.GetFiles(_dir, "netstrip-*.log").Select(Path.GetFileName).OrderBy(n => n).ToArray();
+        Assert.Equal(7, names.Length);
+        Assert.Equal("netstrip-2026-10-04.log", names[0]);
+        Assert.Equal("netstrip-2026-10-10.log", names[^1]);
+    }
 }
