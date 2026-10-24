@@ -58,10 +58,25 @@
                 <TextBlock x:Name="DownArrow" Grid.Row="1" Grid.Column="0" Text="↓" Margin="0,0,6,0" />
                 <TextBlock x:Name="DownValue" Grid.Row="1" Grid.Column="1" TextAlignment="Right" HorizontalAlignment="Right" />
             </Grid>
-            <!-- Compact: one line; shrinks (never grows) if mixed units make it wider than the measured width. -->
+            <!-- Compact: two short lines in a smaller font ("↑ 209 Kb" over "↓ 0.4 Mb", no "/s"), much narrower than Full.
+                 CompactGrid has a fixed width (set in code) so changing digits never rescale it; the Viewbox only shrinks
+                 it when the host gives less room than measured (a crowded taskbar). -->
             <Viewbox x:Name="CompactLayout" Visibility="Collapsed" Stretch="Uniform" StretchDirection="DownOnly"
                      HorizontalAlignment="Right" VerticalAlignment="Center">
-                <TextBlock TextWrapping="NoWrap" FontSize="10"><Run x:Name="CompactDownArrow" Text="↓" /><Run x:Name="CompactDownRun" /><Run Text=" " /><Run x:Name="CompactUpArrow" Text="↑" /><Run x:Name="CompactUpRun" /></TextBlock>
+                <Grid x:Name="CompactGrid">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="CompactUpArrow" Grid.Row="0" Grid.Column="0" Text="↑" FontSize="10" Margin="0,0,3,0" />
+                    <TextBlock x:Name="CompactUpValue" Grid.Row="0" Grid.Column="1" FontSize="10" TextAlignment="Right" HorizontalAlignment="Right" />
+                    <TextBlock x:Name="CompactDownArrow" Grid.Row="1" Grid.Column="0" Text="↓" FontSize="10" Margin="0,0,3,0" />
+                    <TextBlock x:Name="CompactDownValue" Grid.Row="1" Grid.Column="1" FontSize="10" TextAlignment="Right" HorizontalAlignment="Right" />
+                </Grid>
             </Viewbox>
             <!-- Vertical (side taskbars): upload above download, each unit under its number. VerticalGrid has a fixed
                  width (set in code) so the Viewbox scale stays constant as digits change; it only ever shrinks. -->

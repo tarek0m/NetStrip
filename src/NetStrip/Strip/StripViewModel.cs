@@ -26,7 +26,7 @@ internal sealed class StripViewModel
     public string UpText { get; private set; } = "";
     public string DownText { get; private set; } = "";
 
-    /// <summary>Compact pieces: the down piece omits its unit when both speeds share one.</summary>
+    /// <summary>Compact lines: the speed without "/s" ("209 Kb"), which keeps the compact strip narrow.</summary>
     public string CompactDown { get; private set; } = "";
     public string CompactUp { get; private set; } = "";
 
@@ -52,13 +52,12 @@ internal sealed class StripViewModel
 
         if ((changes & (Changes.Up | Changes.Down)) != 0)
         {
-            // "↓8.40 ↑1.20 MB/s" when units match; otherwise each speed carries its own unit.
-            var (downNumber, downUnit) = Split(down);
-            var compactDown = downUnit == Split(up).Unit ? downNumber : down;
-            if (compactDown != CompactDown || up != CompactUp)
+            var compactDown = WithoutPerSecond(down);
+            var compactUp = WithoutPerSecond(up);
+            if (compactDown != CompactDown || compactUp != CompactUp)
             {
                 CompactDown = compactDown;
-                CompactUp = up;
+                CompactUp = compactUp;
                 changes |= Changes.Compact;
             }
         }
@@ -82,6 +81,8 @@ internal sealed class StripViewModel
         }
         return changes;
     }
+
+    private static string WithoutPerSecond(string speed) => speed.EndsWith("/s", StringComparison.Ordinal) ? speed[..^2] : speed;
 
     /// <summary>"1.20 MB/s" → ("1.20", "MB/s").</summary>
     internal static (string Number, string Unit) Split(string speed)

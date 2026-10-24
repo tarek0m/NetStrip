@@ -30,6 +30,8 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
     private const double VerticalArrowGapDip = 3;       // the vertical arrows' right margin in StripWindow.xaml
     private const double VerticalUnitGapDip = 3;        // the upload unit's bottom margin in StripWindow.xaml
     private const string WidestNumber = "999.9";
+    private const string WidestCompactSpeed = "999.9 MB";
+    private const double CompactArrowGapDip = 3;        // the compact arrows' right margin in StripWindow.xaml
     private const string WidestUnit = "MB/s";
     // WPF scales the default control font by 7/6 under the Fluent theme (ThemeManager.DefaultFluentFontSizeFactor).
     private const double FluentFontSizeFactor = 7.0 / 6.0;
@@ -104,8 +106,7 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         switch (mode)
         {
             case StripMode.Compact:
-                MeasureText("↓999 ↑999 MB/s", CompactFontSizeDip, out var compactWidth);
-                return (Px(compactWidth + CompactPaddingDip, dpiScale), taskbarThickness);
+                return (Px(CompactContentWidth() + CompactPaddingDip, dpiScale), taskbarThickness);
             case StripMode.Floating:
                 return (Px(FullContentWidth() + HorizontalPaddingDip + 2 * CapsulePaddingXDip, dpiScale),
                         Px(2 * lineHeight + 2 * CapsulePaddingYDip, dpiScale));
@@ -125,6 +126,14 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         MeasureText("↓", BaseFontSizeDip, out var arrow);
         MeasureText(WidestSpeed, BaseFontSizeDip, out var speed);
         return arrow + ArrowGapDip + speed + RoundingSlackDip;
+    }
+
+    /// <summary>Mirrors CompactGrid: arrow column (glyph + gap), then the widest speed without "/s", all in the compact font.</summary>
+    private double CompactContentWidth()
+    {
+        MeasureText("↓", CompactFontSizeDip, out var arrow);
+        MeasureText(WidestCompactSpeed, CompactFontSizeDip, out var speed);
+        return arrow + CompactArrowGapDip + speed + RoundingSlackDip;
     }
 
     /// <summary>Mirrors VerticalGrid: arrow column (glyph + gap), then the wider of the widest number and unit.</summary>
@@ -218,8 +227,8 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         }
         if ((changes & StripViewModel.Changes.Compact) != 0)
         {
-            CompactDownRun.Text = _vm.CompactDown;
-            CompactUpRun.Text = _vm.CompactUp;
+            CompactDownValue.Text = _vm.CompactDown;
+            CompactUpValue.Text = _vm.CompactUp;
         }
         if ((changes & StripViewModel.Changes.Tooltip) != 0) Root.ToolTip = _vm.Tooltip;
         if ((changes & StripViewModel.Changes.Cap) != 0) ApplyArrowBrushes();
@@ -276,6 +285,7 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         CompactLayout.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
         VerticalLayout.Visibility = vertical ? Visibility.Visible : Visibility.Collapsed;
         if (vertical) VerticalGrid.Width = VerticalContentWidth();
+        if (compact) CompactGrid.Width = CompactContentWidth();
 
         var floating = mode == StripMode.Floating;
         Inner.Margin = floating ? new Thickness(CapsulePaddingXDip, CapsulePaddingYDip, CapsulePaddingXDip, CapsulePaddingYDip)
@@ -294,8 +304,8 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         var number = _theme.TaskbarForeground;
         UpValue.Foreground = number;
         DownValue.Foreground = number;
-        CompactDownRun.Foreground = number;
-        CompactUpRun.Foreground = number;
+        CompactDownValue.Foreground = number;
+        CompactUpValue.Foreground = number;
         VerticalUpNumber.Foreground = number;
         VerticalUpUnit.Foreground = number;
         VerticalDownNumber.Foreground = number;

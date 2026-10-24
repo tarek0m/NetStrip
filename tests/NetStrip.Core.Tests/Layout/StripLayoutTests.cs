@@ -75,6 +75,29 @@ public class StripLayoutTests
     }
 
     [Fact]
+    public void CompactSlightlyTooWide_ShrinksIntoTheGap()
+    {
+        // App buttons end at 1640: gap = 1696 - (1640 + 4) = 52, between 70 % of compact (42) and its width (60).
+        var g = new TaskbarGeometry(BottomTaskbar, BottomTray, new PixelRect(500, 1040, 1140, 48), TaskbarEdge.Bottom, 1.0);
+
+        var (bounds, mode) = StripLayout.Place(g, Full, Compact, Vertical, Padding);
+
+        Assert.Equal(StripMode.Compact, mode);
+        Assert.Equal(new PixelRect(1644, 14, 52, 20), bounds);   // still right-aligned to the tray, nothing overlaps
+    }
+
+    [Fact]
+    public void CompactGap_BelowMinimumScale_DoesNotShrink()
+    {
+        // Gap = 1696 - (1655 + 4) = 37 < 42: shrinking further would be unreadable, so keep the natural size.
+        var g = new TaskbarGeometry(BottomTaskbar, BottomTray, new PixelRect(500, 1040, 1155, 48), TaskbarEdge.Bottom, 1.0);
+
+        var (bounds, _) = StripLayout.Place(g, Full, Compact, Vertical, Padding);
+
+        Assert.Equal(new PixelRect(1636, 14, 60, 20), bounds);
+    }
+
+    [Fact]
     public void TaskListTouchingButNotOverlapping_StaysFull()
     {
         // App buttons end exactly where the full strip starts (1606): edges touching is not an overlap.
