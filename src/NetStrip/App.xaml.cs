@@ -1,7 +1,9 @@
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using NetStrip.Core;
 using NetStrip.Core.Logging;
 
@@ -11,6 +13,7 @@ public partial class App : Application
 {
     private IDisposable? _instanceHandle;
     private AppHost? _host;
+    private DispatcherTimer? _exitTimer;
 
     public static ILog Log { get; private set; } = null!;
 
@@ -27,6 +30,9 @@ public partial class App : Application
         InstallGlobalHandlers();
 
         var fake = e.Args.Contains("--fake", StringComparer.OrdinalIgnoreCase);
+        var exitAfter = ExitAfterOption.Parse(e.Args, out var exitAfterIgnored);
+        if (exitAfterIgnored)
+            Log.Warn($"Ignoring {ExitAfterOption.Name}: expected a number of seconds above 0 and at most {ExitAfterOption.Max.TotalSeconds}.");
 
         if (!SingleInstance.TryAcquire(out var handle))
         {
@@ -52,6 +58,7 @@ public partial class App : Application
         {
             _host = new AppHost(this, Log, fake);
             _host.Start();
+            if (exitAfter is { } delay) ScheduleExit(delay);
         }
         catch (Exception ex)
         {
@@ -70,6 +77,24 @@ public partial class App : Application
         try { _instanceHandle?.Dispose(); }
         catch (ApplicationException) { /* mutex not owned by this thread */ }
         base.OnExit(e);
+    }
+
+    /// <summary>
+    /// For <c>--exit-after</c>: shuts down through <see cref="Application.Shutdown()"/> once <paramref name="delay"/> has
+    /// passed, so <see cref="OnExit"/> disposes AppHost, saves usage and logs the exit exactly as a user's Exit would.
+    /// </summary>
+    private void ScheduleExit(TimeSpan delay)
+    {
+        Log.Info($"Will exit by itself in {delay.TotalSeconds.ToString(CultureInfo.InvariantCulture)} s ({ExitAfterOption.Name}).");
+        var timer = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher) { Interval = delay };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            Log.Info($"{ExitAfterOption.Name} elapsed; shutting down.");
+            Shutdown();
+        };
+        timer.Start();
+        _exitTimer = timer;
     }
 
     private void InstallGlobalHandlers()
