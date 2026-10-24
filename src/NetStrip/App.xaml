@@ -1,7 +1,8 @@
 <Application x:Class="NetStrip.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             ShutdownMode="OnExplicitShutdown"
-             ThemeMode="System">
+             ShutdownMode="OnExplicitShutdown">
+    <!-- No ThemeMode here: setting it loads PresentationFramework.Fluent at startup, and at idle only the strip is on
+         screen, which draws with its own brushes. AppHost.EnsureTheme sets it before Fluent-styled UI first appears. -->
     <Application.Resources />
 </Application>

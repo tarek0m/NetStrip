@@ -31,6 +31,8 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
     private const double VerticalUnitGapDip = 3;        // the upload unit's bottom margin in StripWindow.xaml
     private const string WidestNumber = "999.9";
     private const string WidestUnit = "MB/s";
+    // WPF scales the default control font by 7/6 under the Fluent theme (ThemeManager.DefaultFluentFontSizeFactor).
+    private const double FluentFontSizeFactor = 7.0 / 6.0;
 
     // A layered window passes clicks on fully transparent pixels through to the window behind it (the taskbar), so
     // "Transparent" would leave only the glyphs clickable. Alpha 1/255 is invisible but catches clicks everywhere.
@@ -73,6 +75,12 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
     public event Action? SettingsRequested;
     public event Action? ExitRequested;
     public event Action<bool>? PauseToggled;
+
+    /// <summary>
+    /// Raised, synchronously, right before the context menu or tooltip opens, so the host can load the Fluent theme
+    /// they are styled with. The argument names what is opening, for the log.
+    /// </summary>
+    public event Action<string>? ThemeNeeded;
 
     /// <summary>Raised when a floating-mode drag ends, with the new top-left in screen pixels.</summary>
     public event Action<PixelPoint>? FloatingMoved;
@@ -353,6 +361,7 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         SettingsRequested = null;
         ExitRequested = null;
         PauseToggled = null;
+        ThemeNeeded = null;
         FloatingMoved = null;
         if (_closed) return;
         try
@@ -420,6 +429,19 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         _pressed = false;
         _dragged = false;
         if (wasClick) FlyoutRequested?.Invoke();
+    }
+
+    // Both events are raised before WPF builds the popup: the tooltip is created after ToolTipOpening returns, and the
+    // menu is first parented into its popup (which re-reads its implicit styles) after ContextMenuOpening returns.
+    // So the first menu and tooltip already render with the Fluent styles loaded here.
+    private void OnToolTipOpening(object sender, ToolTipEventArgs e) => ThemeNeeded?.Invoke("strip tooltip");
+
+    private void OnContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        ThemeNeeded?.Invoke("strip menu");
+        // MenuItem fixed its default font size when this window was built, before the theme existed, so it lacks the
+        // Fluent scaling; the Fluent menu styles set no size. Give the menu the size it gets with the theme preloaded.
+        if (Root.ContextMenu is { } menu) menu.FontSize = SystemFonts.MessageFontSize * FluentFontSizeFactor;
     }
 
     private void OnSettingsClick(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke();
