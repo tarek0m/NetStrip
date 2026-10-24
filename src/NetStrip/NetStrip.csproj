@@ -10,6 +10,8 @@
     <ApplicationIcon>Assets\NetStrip.ico</ApplicationIcon>
     <!-- Working-set budget (spec: ≤ 60 MB): no PGO instrumentation for an app that does a little work once a second. -->
     <TieredPGO>false</TieredPGO>
+    <!-- NetStrip is English-only: don't ship the framework's translated resources (about 9 MB in the standalone build). -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
   <ItemGroup>
     <!-- Workstation GC sizes gen0 from the CPU's last-level cache (4/5 of it), so on a big desktop CPU the heap walks
