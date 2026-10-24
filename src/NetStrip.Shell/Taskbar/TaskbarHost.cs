@@ -14,7 +14,8 @@ namespace NetStrip.Shell.Taskbar;
 
 /// <summary>
 /// Attaches one strip surface per taskbar in <see cref="Scope"/>, keeps it positioned, re-attaches after Explorer
-/// restarts, and falls back to floating mode per <see cref="AttachRetryPolicy"/> (spec §6).
+/// restarts, and falls back to floating mode per <see cref="AttachRetryPolicy"/> (spec §6). While attached it re-probes
+/// the app-button area per <see cref="TaskListProbeSchedule"/>, so centred icons switch the strip to compact and back.
 /// UI-thread only. Win32 failures are logged and retried; nothing throws out of hooks or timers (spec §12).
 /// </summary>
 /// <remarks>
@@ -34,12 +35,15 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan HealthCheckInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan BusyRetryDelay = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan PeriodicProbeInterval = TimeSpan.FromSeconds(30);
 
     private readonly Dictionary<string, Attachment> _attachments = new();
     private readonly Dictionary<string, IStripSurface> _surfaces = new();
     private readonly Dictionary<nint, ProbeResult> _probeResults = new();
     private readonly AttachRetryPolicy _policy = new(StartupGrace, MaxAttachFailures);
     private readonly Stopwatch _sinceStart = new();   // restarted when Explorer restarts: a fresh grace window
+    private readonly Stopwatch _uptime = new();       // never restarted: the periodic probe's clock
+    private readonly TaskListProbeSchedule _probeSchedule = new(PeriodicProbeInterval);
 
     private Dispatcher? _dispatcher;
     private DispatcherTimer? _debounce;
@@ -85,6 +89,7 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
         _started = true;
         _dispatcher = Dispatcher.CurrentDispatcher;
         _sinceStart.Restart();
+        _uptime.Start();
 
         var debounce = new DispatcherTimer(DispatcherPriority.Normal, _dispatcher) { Interval = DebounceDelay };
         debounce.Tick += (_, _) =>
@@ -428,8 +433,15 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
         _maintenance?.Stop();
         try
         {
-            if (NeedsAttachPass()) AttachAll("retry/health check");
-            else Schedule(HealthCheckInterval);
+            if (NeedsAttachPass())
+            {
+                AttachAll("retry/health check");
+            }
+            else
+            {
+                Schedule(HealthCheckInterval);
+                RequestPeriodicProbe();
+            }
         }
         catch (Exception ex)
         {
@@ -600,21 +612,38 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
 
     // ---- Task-list probe (UI Automation, off the UI thread) ----------------------------------------------
 
-    private void RequestProbe()
+    /// <summary>
+    /// Health-check tick (attached, not floating): re-probe once <see cref="PeriodicProbeInterval"/> has passed since
+    /// the last probe finished. Windows 11's app buttons are XAML, so a row of centred icons growing toward the strip
+    /// moves no window and raises no location event; this is what switches the strip to compact and back.
+    /// </summary>
+    private void RequestPeriodicProbe()
+    {
+        if (_probeRunning || !_probeSchedule.IsDue(_uptime.Elapsed)) return;
+        RequestProbe(periodic: true);
+    }
+
+    /// <summary>
+    /// Probes the taskbars whose layout uses the result. Non-periodic requests (attach, reposition) run at once, or
+    /// right after a running probe; periodic ones are dropped while a probe runs and skip hidden strips.
+    /// </summary>
+    private void RequestProbe(bool periodic = false)
     {
         if (_disposed || _dispatcher is null) return;
         if (_probeRunning)
         {
-            _probeAgain = true;
+            if (!periodic) _probeAgain = true;
             return;
         }
 
-        var targets = new List<(nint Hwnd, bool WantClock)>(_attachments.Count);
+        List<(nint Hwnd, bool WantClock)>? targets = null;   // created only when there is something to probe
         foreach (var attachment in _attachments.Values)
         {
-            if (!attachment.Taskbar.IsNull) targets.Add((attachment.Taskbar, attachment.Key != TaskbarKeys.Primary));
+            if (!WantsProbe(attachment, periodic)) continue;
+            targets ??= new List<(nint Hwnd, bool WantClock)>(_attachments.Count);
+            targets.Add((attachment.Taskbar, attachment.Key != TaskbarKeys.Primary));
         }
-        if (targets.Count == 0) return;
+        if (targets is null) return;
 
         _probeRunning = true;
         var dispatcher = _dispatcher;
@@ -630,10 +659,20 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
         });
     }
 
+    private static bool WantsProbe(Attachment attachment, bool periodic)
+    {
+        if (!attachment.Attached || attachment.Taskbar.IsNull || attachment.Last is not { } last) return false;
+        if (!TaskListProbeSchedule.Wants(attachment.Key != TaskbarKeys.Primary, last.Mode)) return false;
+        // A strip hidden for a fullscreen app needs no fresh layout. The schedule is due by the time it reappears,
+        // so the next health check (at most 2 s later) probes it again.
+        return !periodic || PInvoke.IsWindowVisible((HWND)attachment.Surface.Handle);
+    }
+
     private void OnProbeCompleted(List<(nint Hwnd, ProbeResult Result, Exception? Error)> results)
     {
         _probeRunning = false;
         if (_disposed) return;
+        _probeSchedule.RecordCompleted(_uptime.Elapsed);   // failed probes count too: retry on the same cadence
 
         try
         {
@@ -654,9 +693,13 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
                 }
             }
 
-            foreach (var stale in _probeResults.Keys.Where(h => !_attachments.Values.Any(a => (nint)a.Taskbar == h)).ToList())
-                _probeResults.Remove(stale);
+            // Dictionary allows Remove while enumerating, so the steady state (nothing stale) allocates nothing.
+            foreach (var hwnd in _probeResults.Keys)
+            {
+                if (!HasAttachmentFor(hwnd)) _probeResults.Remove(hwnd);
+            }
 
+            // An unchanged result leaves every strip where it is; a changed one is applied right away.
             if (changed) RepositionCore();
         }
         catch (Exception ex)
@@ -669,6 +712,15 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
             _probeAgain = false;
             RequestProbe();
         }
+    }
+
+    private bool HasAttachmentFor(nint taskbar)
+    {
+        foreach (var attachment in _attachments.Values)
+        {
+            if ((nint)attachment.Taskbar == taskbar) return true;
+        }
+        return false;
     }
 
     // ---- Surfaces ---------------------------------------------------------------------------------------
