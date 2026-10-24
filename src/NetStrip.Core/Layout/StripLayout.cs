@@ -15,11 +15,20 @@ public static class StripLayout
     /// <paramref name="vertical"/> on side taskbars. The returned bounds are relative to the taskbar's top-left corner.
     /// </summary>
     public static (PixelRect Bounds, StripMode Mode) Place(TaskbarGeometry g, (int W, int H) full, (int W, int H) compact,
-        (int W, int H) vertical, int paddingPx)
+        (int W, int H) vertical, int paddingPx) =>
+        Place(g, full, compact, vertical, paddingPx, out _);
+
+    /// <param name="crowded">
+    /// True when the app buttons leave no usable gap even for a shrunk compact strip, so the returned compact bounds
+    /// overlap them; the host then floats or hides the strip per <see cref="CrowdedBehavior"/>.
+    /// </param>
+    public static (PixelRect Bounds, StripMode Mode) Place(TaskbarGeometry g, (int W, int H) full, (int W, int H) compact,
+        (int W, int H) vertical, int paddingPx, out bool crowded)
     {
+        crowded = false;
         var (screen, mode) = IsVertical(g.Edge)
             ? PlaceVertical(g, vertical, paddingPx)
-            : PlaceHorizontal(g, full, compact, paddingPx);
+            : PlaceHorizontal(g, full, compact, paddingPx, out crowded);
         return (screen with { X = screen.X - g.Taskbar.X, Y = screen.Y - g.Taskbar.Y }, mode);
     }
 
@@ -69,8 +78,10 @@ public static class StripLayout
     /// <summary>Smallest width, as a share of compact's natural width, the strip shrinks to on a crowded taskbar.</summary>
     public const double MinCompactScale = 0.7;
 
-    private static (PixelRect Screen, StripMode Mode) PlaceHorizontal(TaskbarGeometry g, (int W, int H) full, (int W, int H) compact, int padding)
+    private static (PixelRect Screen, StripMode Mode) PlaceHorizontal(TaskbarGeometry g, (int W, int H) full, (int W, int H) compact,
+        int padding, out bool crowded)
     {
+        crowded = false;
         var right = (g.Tray is { } tray ? tray.X : Right(g.Taskbar)) - padding;
         PixelRect At((int W, int H) size) =>
             new(right - size.W, g.Taskbar.Y + (g.Taskbar.Height - size.H) / 2, size.W, size.H);
@@ -82,12 +93,12 @@ public static class StripLayout
         if (!Intersects(compactRect, taskList)) return (compactRect, StripMode.Compact);
 
         // Crowded taskbar: shrink compact into the gap between the app buttons and the tray (its content scales down
-        // uniformly), as long as it stays readable. With no usable gap it stays compact and overlaps; never hide.
+        // uniformly), as long as it stays readable. With no usable gap the compact bounds overlap and it is crowded.
         var gap = right - (Right(taskList) + padding);
         var minWidth = (int)Math.Ceiling(compact.W * MinCompactScale);
-        return gap >= minWidth && gap < compact.W
-            ? (At((gap, compact.H)), StripMode.Compact)
-            : (compactRect, StripMode.Compact);
+        if (gap >= minWidth && gap < compact.W) return (At((gap, compact.H)), StripMode.Compact);
+        crowded = true;
+        return (compactRect, StripMode.Compact);
     }
 
     /// <summary>

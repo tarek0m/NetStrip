@@ -45,7 +45,8 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
     private readonly StripViewModel _vm = new();
 
     private StripMode _mode = StripMode.Full;
-    private bool _hidden;
+    private bool _hidden;          // fullscreen hiding (SetHidden)
+    private bool _crowdHidden;     // the taskbar is full and the user chose to hide (StripPlacement.Hidden)
     private bool _placed;
     private (int Width, int Height) _sizePx;
     private double _fittedDpiScale;
@@ -180,7 +181,15 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         FitContentToWindow();
 
         _placed = true;
-        if (!_hidden && !IsVisible) base.Show();
+        _crowdHidden = placement.Hidden;
+        if (_crowdHidden)
+        {
+            if (IsVisible) Hide();
+        }
+        else if (!_hidden && !IsVisible)
+        {
+            base.Show();
+        }
     }
 
     /// <summary>
@@ -199,7 +208,7 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         {
             if (IsVisible) Hide();
         }
-        else if (!IsVisible && _stylesApplied && _placed)   // never show a window that has not been positioned yet
+        else if (!IsVisible && !_crowdHidden && _stylesApplied && _placed)   // never show an unpositioned or crowded-out window
         {
             base.Show();
         }

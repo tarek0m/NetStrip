@@ -153,6 +153,18 @@ public class SettingsStoreTests
     }
 
     [Fact]
+    public void WhenCrowded_DefaultsToFloat_AndRoundTripsAsCamelCase()
+    {
+        var store = Create();
+        Assert.Equal(CrowdedBehavior.Float, store.Load().WhenCrowded);
+
+        store.Update(s => s.WhenCrowded = CrowdedBehavior.Hide);
+
+        Assert.Equal("hide", JsonDocument.Parse(_fs.Files[Path]).RootElement.GetProperty("whenCrowded").GetString());
+        Assert.Equal(CrowdedBehavior.Hide, Create().Load().WhenCrowded);
+    }
+
+    [Fact]
     public void BrieflyLockedFile_IsReadAfterRetry()
     {
         _fs.Files[Path] = """{ "units": "bytes" }""";

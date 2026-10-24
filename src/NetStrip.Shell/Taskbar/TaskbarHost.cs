@@ -69,6 +69,7 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
     private bool _disposed;
     private bool _busy;
     private bool _inFallback;
+    private CrowdedBehavior _crowdedBehavior = CrowdedBehavior.Float;
     private bool _probeRunning;
     private bool _probeAgain;
     private bool _probeFailureLogged;
@@ -89,6 +90,18 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
             if (_scope == value) return;
             _scope = value;
             if (_started && !_disposed) AttachAll("monitor scope changed");
+        }
+    }
+
+    /// <summary>What a strip does when its taskbar's app buttons leave no room (settings: "When the taskbar is full").</summary>
+    public CrowdedBehavior CrowdedBehavior
+    {
+        get => _crowdedBehavior;
+        set
+        {
+            if (_crowdedBehavior == value) return;
+            _crowdedBehavior = value;
+            if (_started && !_disposed) Reposition();
         }
     }
 
@@ -258,7 +271,7 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
         if (!IsOurWindow(surface)) return Fail($"{taskbar.Key}: strip window has no live handle");
         attachment.KnownHandle = surface;
 
-        if (attachment.Attached && attachment.Taskbar == taskbar.Hwnd && IsChildOf(surface, taskbar.Hwnd)) return true;
+        if (attachment.Attached && attachment.Taskbar == taskbar.Hwnd && IsInPlace(attachment)) return true;
 
         var located = TaskbarLocator.TryLocate(taskbar);
         if (located is null) return Fail($"{taskbar.Key}: taskbar geometry unavailable");
@@ -276,11 +289,16 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
         attachment.Taskbar = taskbar.Hwnd;
         attachment.Attached = false;
         attachment.Floating = false;
+        attachment.CrowdFloating = false;
         attachment.Last = null;
         ApplyAttached(attachment, located);
 
-        if (!IsChildOf(surface, taskbar.Hwnd)) return Fail($"{taskbar.Key}: strip is not a child of the taskbar after SetParent");
-        if (!IsInside(surface, taskbar.Hwnd)) return Fail($"{taskbar.Key}: strip ended up outside the taskbar rect");
+        // A full taskbar may have floated it straight away (CrowdedBehavior.Float): that is attached, by choice.
+        if (!attachment.CrowdFloating)
+        {
+            if (!IsChildOf(surface, taskbar.Hwnd)) return Fail($"{taskbar.Key}: strip is not a child of the taskbar after SetParent");
+            if (!IsInside(surface, taskbar.Hwnd)) return Fail($"{taskbar.Key}: strip ended up outside the taskbar rect");
+        }
 
         attachment.Attached = true;
         log.Info($"TaskbarHost: attached strip to taskbar '{taskbar.Key}' ({attachment.Last?.Mode} mode)");
@@ -380,8 +398,7 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
                 {
                     if (attachment.Attached)
                     {
-                        var surface = (HWND)attachment.Surface.Handle;
-                        var located = IsOurWindow(surface) && IsChildOf(surface, attachment.Taskbar)
+                        var located = IsInPlace(attachment)
                             ? TaskbarLocator.TryLocate(new TaskbarHandle(attachment.Key, attachment.Taskbar))
                             : null;
                         if (located is null)
@@ -424,20 +441,79 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
         var vertical = StripLayout.IsVertical(g.Edge);
         var thickness = vertical ? g.Taskbar.Width : g.Taskbar.Height;
         (int, int) Size(StripMode m) => attachment.Surface.Measure(m, g.DpiScale, thickness);
+        var crowded = false;
         var (bounds, mode) = vertical
             ? StripLayout.Place(g, default, default, Size(StripMode.Vertical), Padding(g.DpiScale))
-            : StripLayout.Place(g, Size(StripMode.Full), Size(StripMode.Compact), default, Padding(g.DpiScale));
+            : StripLayout.Place(g, Size(StripMode.Full), Size(StripMode.Compact), default, Padding(g.DpiScale), out crowded);
+        attachment.LayoutMode = mode;
 
-        var screen = bounds with { X = bounds.X + g.Taskbar.X, Y = bounds.Y + g.Taskbar.Y };
-        var stillOverlaps = mode == StripMode.Compact && g.TaskList is { } list && StripLayout.Intersects(screen, list);
-        if (stillOverlaps && !attachment.OverlapLogged)
-            log.Info($"TaskbarHost: compact strip on '{attachment.Key}' still overlaps the taskbar buttons; keeping it compact");
-        attachment.OverlapLogged = stillOverlaps;
+        if (crowded != attachment.Crowded)
+        {
+            log.Info(crowded
+                ? $"TaskbarHost: taskbar '{attachment.Key}' is full; {(_crowdedBehavior == CrowdedBehavior.Float ? "floating" : "hiding")} its strip until there is room"
+                : $"TaskbarHost: taskbar '{attachment.Key}' has room again; strip back on the taskbar");
+            attachment.Crowded = crowded;
+        }
+
+        if (crowded && _crowdedBehavior == CrowdedBehavior.Float)
+        {
+            FloatCrowded(attachment, located, g);
+            return;
+        }
+        if (attachment.CrowdFloating && !ReattachCrowded(attachment, located)) return;
 
         // Layout is relative to the taskbar's window rect; StripPlacement wants the parent's client coordinates.
+        var screen = bounds with { X = bounds.X + g.Taskbar.X, Y = bounds.Y + g.Taskbar.Y };
         var client = ClientOrigin(located.Hwnd, g.Taskbar);
         var relative = screen with { X = screen.X - client.X, Y = screen.Y - client.Y };
-        ApplyIfChanged(attachment, new StripPlacement(located.Hwnd, relative, mode, g.DpiScale));
+        ApplyIfChanged(attachment, new StripPlacement(located.Hwnd, relative, mode, g.DpiScale, Hidden: crowded));
+    }
+
+    /// <summary>
+    /// Taskbar full, CrowdedBehavior.Float: make the strip a top-level pill just above this taskbar's tray (as in the
+    /// fallback) while it stays attached for health checks and probes, which bring it back once there is room.
+    /// </summary>
+    private void FloatCrowded(Attachment attachment, LocatedTaskbar located, TaskbarGeometry g)
+    {
+        var surface = (HWND)attachment.Surface.Handle;
+        if (!attachment.CrowdFloating)
+        {
+            PInvoke.SetParent(surface, HWND.Null);
+            SetChildStyle(surface, child: false);
+            attachment.CrowdFloating = true;
+            attachment.Last = null;
+        }
+        var thickness = StripLayout.IsVertical(g.Edge) ? g.Taskbar.Width : g.Taskbar.Height;
+        var size = attachment.Surface.Measure(StripMode.Floating, g.DpiScale, thickness);
+        var rect = StripLayout.PlaceFloating(located.WorkArea, g.Tray, g.Edge, size, Padding(g.DpiScale));
+        ApplyIfChanged(attachment, new StripPlacement(0, rect, StripMode.Floating, g.DpiScale));
+    }
+
+    /// <summary>Room again after crowd-floating: parent the strip back to its taskbar. False if that failed.</summary>
+    private bool ReattachCrowded(Attachment attachment, LocatedTaskbar located)
+    {
+        var surface = (HWND)attachment.Surface.Handle;
+        SetChildStyle(surface, child: true);
+        Marshal.SetLastPInvokeError(0);
+        var previous = PInvoke.SetParent(surface, located.Hwnd);
+        if (previous.IsNull && Marshal.GetLastPInvokeError() is var error and not 0)
+        {
+            SetChildStyle(surface, child: false);
+            log.Warn($"TaskbarHost: putting the '{attachment.Key}' strip back on the taskbar failed (error {error}); re-attaching");
+            attachment.Attached = false;   // the health check runs a full attach pass
+            return false;
+        }
+        attachment.CrowdFloating = false;
+        attachment.Last = null;
+        return true;
+    }
+
+    /// <summary>The strip is where an attached strip belongs: a live child of its live taskbar, or crowd-floating.</summary>
+    private static bool IsInPlace(Attachment attachment)
+    {
+        var surface = (HWND)attachment.Surface.Handle;
+        if (!IsOurWindow(surface) || !PInvoke.IsWindow(attachment.Taskbar)) return false;
+        return attachment.CrowdFloating || IsChildOf(surface, attachment.Taskbar);
     }
 
     private static void ApplyIfChanged(Attachment attachment, StripPlacement placement)
@@ -477,7 +553,7 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
         foreach (var attachment in _attachments.Values)
         {
             if (!attachment.Attached) return true;
-            if (!IsOurWindow((HWND)attachment.Surface.Handle) || !IsChildOf((HWND)attachment.Surface.Handle, attachment.Taskbar))
+            if (!IsInPlace(attachment))
             {
                 NoteShellRestartIfTaskbarGone();
                 return true;
@@ -702,11 +778,12 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
 
     private static bool WantsProbe(Attachment attachment, bool periodic)
     {
-        if (!attachment.Attached || attachment.Taskbar.IsNull || attachment.Last is not { } last) return false;
-        if (!TaskListProbeSchedule.Wants(attachment.Key != TaskbarKeys.Primary, last.Mode)) return false;
-        // A strip hidden for a fullscreen app needs no fresh layout. The schedule is due by the time it reappears,
-        // so the next health check (at most 2 s later) probes it again.
-        return !periodic || PInvoke.IsWindowVisible((HWND)attachment.Surface.Handle);
+        if (!attachment.Attached || attachment.Taskbar.IsNull || attachment.Last is null) return false;
+        if (!TaskListProbeSchedule.Wants(attachment.Key != TaskbarKeys.Primary, attachment.LayoutMode)) return false;
+        // A crowded strip (hidden or floating) must keep probing: that is how it learns there is room again. A strip
+        // hidden for a fullscreen app needs no fresh layout; the schedule is due by the time it reappears, so the next
+        // health check (at most 2 s later) probes it again.
+        return !periodic || attachment.Crowded || PInvoke.IsWindowVisible((HWND)attachment.Surface.Handle);
     }
 
     private void OnProbeCompleted(List<(nint Hwnd, ProbeResult Result, Exception? Error)> results)
@@ -897,7 +974,12 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
         public HWND KnownHandle { get; set; }
         public bool Attached { get; set; }
         public bool Floating { get; set; }
-        public bool OverlapLogged { get; set; }
+        /// <summary>Taskbar full and the user chose Float: attached, but the strip is a top-level pill above the tray.</summary>
+        public bool CrowdFloating { get; set; }
+        /// <summary>Taskbar full (no usable gap even for a shrunk compact strip), whatever the strip does about it.</summary>
+        public bool Crowded { get; set; }
+        /// <summary>The mode the taskbar layout chose (Full/Compact/Vertical), even while crowded-floating.</summary>
+        public StripMode LayoutMode { get; set; }
         public StripPlacement? Last { get; set; }
     }
 }

@@ -24,6 +24,9 @@ public enum MonitorScope { Primary, All }
 public enum ThemeSetting { System, Light, Dark }
 public enum TaskbarEdge { Bottom, Top, Left, Right }
 public enum CapLevel { None, Warning80, Reached100 }
+
+/// <summary>What the strip does when a horizontal taskbar's app buttons leave no room even for a shrunk compact strip.</summary>
+public enum CrowdedBehavior { Float, Hide }
 public readonly record struct PixelPoint(int X, int Y);
 public readonly record struct Totals(long UpBytes, long DownBytes);
 public sealed record UpdateInfo(Version Version, Uri ReleaseUrl);
@@ -44,6 +47,7 @@ public sealed class AppSettings
     public string CapAdapter { get; set; } = AdapterIds.All;
     public bool CheckForUpdates { get; set; } = true;
     public PixelPoint? FloatingPosition { get; set; }
+    public CrowdedBehavior WhenCrowded { get; set; } = CrowdedBehavior.Float;
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
 
@@ -107,7 +111,8 @@ public interface ISampleSource
 /// </summary>
 public enum StripMode { Full, Compact, Floating, Vertical }
 public readonly record struct PixelRect(int X, int Y, int Width, int Height);
-public sealed record StripPlacement(nint ParentHwnd, PixelRect Bounds, StripMode Mode, double DpiScale);
+/// <param name="Hidden">Placed but not shown: the taskbar is full and the user chose to hide until there is room.</param>
+public sealed record StripPlacement(nint ParentHwnd, PixelRect Bounds, StripMode Mode, double DpiScale, bool Hidden = false);
 
 // Bounds are relative to ParentHwnd's client area for Full/Compact, screen coords for Floating (ParentHwnd = 0)
 public interface IStripSurface

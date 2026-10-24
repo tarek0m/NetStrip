@@ -136,7 +136,7 @@ internal sealed class AppHost : IDisposable
         _fullscreen.FullscreenChanged += OnFullscreenChanged;
 
         // 2. Taskbar host and its strips.
-        _host = new TaskbarHost(CreateStrip, _log) { Scope = cfg.Monitors };
+        _host = new TaskbarHost(CreateStrip, _log) { Scope = cfg.Monitors, CrowdedBehavior = cfg.WhenCrowded };
         _host.FallbackActivated += OnFallbackActivated;
 
         // 5. Notices, cap warnings.
@@ -311,6 +311,7 @@ internal sealed class AppHost : IDisposable
         {
             if (_sampler is not null) _sampler.AdapterSetting = cfg.Adapter;
             _host.Scope = cfg.Monitors;
+            _host.CrowdedBehavior = cfg.WhenCrowded;
             ApplyCapSettings(cfg);
             _themeMode.Set(cfg.Theme);
 

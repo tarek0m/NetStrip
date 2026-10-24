@@ -97,6 +97,32 @@ public class StripLayoutTests
         Assert.Equal(new PixelRect(1636, 14, 60, 20), bounds);
     }
 
+    [Theory]
+    [InlineData(1120, false)]   // full overlaps, compact fits
+    [InlineData(1140, false)]   // compact shrinks into the 52 px gap
+    [InlineData(1155, true)]    // 37 px gap: below 70 % of compact
+    [InlineData(1196, true)]    // app buttons run right up to the tray
+    public void Crowded_OnlyWhenEvenAShrunkCompactStripHasNoRoom(int taskListWidth, bool expected)
+    {
+        var g = new TaskbarGeometry(BottomTaskbar, BottomTray, new PixelRect(500, 1040, taskListWidth, 48), TaskbarEdge.Bottom, 1.0);
+
+        var (_, mode) = StripLayout.Place(g, Full, Compact, Vertical, Padding, out var crowded);
+
+        Assert.Equal(StripMode.Compact, mode);
+        Assert.Equal(expected, crowded);
+    }
+
+    [Fact]
+    public void Crowded_NeverOnSideTaskbars()
+    {
+        var g = new TaskbarGeometry(new PixelRect(0, 0, 62, 1040), new PixelRect(0, 900, 62, 140),
+            new PixelRect(0, 0, 62, 900), TaskbarEdge.Left, 1.0);
+
+        StripLayout.Place(g, Full, Compact, Vertical, Padding, out var crowded);
+
+        Assert.False(crowded);
+    }
+
     [Fact]
     public void TaskListTouchingButNotOverlapping_StaysFull()
     {

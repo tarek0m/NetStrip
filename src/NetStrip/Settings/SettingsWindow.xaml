@@ -57,6 +57,13 @@
                     <ComboBoxItem Content="All taskbars" Tag="All" />
                 </ComboBox>
             </Grid>
+            <Grid Style="{StaticResource Row}">
+                <TextBlock Text="When the taskbar is full" Style="{StaticResource RowLabel}" />
+                <ComboBox x:Name="CrowdedBox" AutomationProperties.Name="When the taskbar is full" SelectionChanged="OnCrowdedChanged">
+                    <ComboBoxItem Content="Float above the taskbar" Tag="Float" />
+                    <ComboBoxItem Content="Hide until there's room" Tag="Hide" />
+                </ComboBox>
+            </Grid>
             <CheckBox x:Name="IdleFadeBox" Content="Fade when idle" Margin="0,6,0,0" Click="OnIdleFadeClick" />
             <CheckBox x:Name="HideFullscreenBox" Content="Hide while an app is full screen" Margin="0,6,0,0" Click="OnHideFullscreenClick" />
 

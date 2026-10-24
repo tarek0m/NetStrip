@@ -39,6 +39,7 @@ public partial class SettingsWindow : Window
         Select(UnitsBox, s.Units.ToString());
         Select(ThemeBox, s.Theme.ToString());
         Select(MonitorsBox, s.Monitors.ToString());
+        Select(CrowdedBox, s.WhenCrowded.ToString());
         IdleFadeBox.IsChecked = s.IdleFade;
         HideFullscreenBox.IsChecked = s.HideInFullscreen;
         SelectOrAdd(AdapterBox, s.Adapter);
@@ -96,6 +97,13 @@ public partial class SettingsWindow : Window
         if (MonitorsBox.SelectedItem is null) return;
         var v = Enum.Parse<MonitorScope>(SelectedTag<string>(MonitorsBox));
         Apply(s => s.Monitors = v);
+    }
+
+    private void OnCrowdedChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (CrowdedBox.SelectedItem is null) return;
+        var v = Enum.Parse<CrowdedBehavior>(SelectedTag<string>(CrowdedBox));
+        Apply(s => s.WhenCrowded = v);
     }
 
     private void OnIdleFadeClick(object sender, RoutedEventArgs e)
