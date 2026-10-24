@@ -100,7 +100,7 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
 
 ### Fallback
 
-- If attach fails 3 consecutive times (handle missing, `SetParent` fails, or window ends up off-taskbar), switch to **floating pill mode**: always-on-top, draggable, rounded capsule placed just above the tray; remember its position. Show a one-time flyout notice explaining why. Retry attach every 60 s; return to inline mode on success.
+- If attach fails 3 consecutive times (handle missing, `SetParent` fails, or window ends up off-taskbar), switch to **floating pill mode**: always-on-top, draggable rounded rectangle (8 px corners, like Windows 11 windows) placed just above the tray; remember its position. Show a one-time flyout notice explaining why. Retry attach every 60 s; return to inline mode on success.
 
 ## 7. StripView
 

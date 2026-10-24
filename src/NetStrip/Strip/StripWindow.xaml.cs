@@ -21,8 +21,10 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
     internal const double CompactFontSizeDip = 10;      // 7.5 pt at 96 dpi
     private const double HorizontalPaddingDip = 8;
     private const double CompactPaddingDip = 4;
-    private const double CapsulePaddingXDip = 14;
-    private const double CapsulePaddingYDip = 6;
+    // Floating strip: a rounded rectangle with Windows 11's window corner radius, so it looks like part of the shell.
+    private const double FloatingPaddingXDip = 10;
+    private const double FloatingPaddingYDip = 6;
+    private const double FloatingCornerRadiusDip = 8;
     private const double ArrowGapDip = 6;               // the arrows' right margin in StripWindow.xaml
     private const double RoundingSlackDip = 1;          // layout rounding can take a fraction of a pixel per element
     private const string WidestSpeed = "999.9 MB/s";
@@ -109,8 +111,8 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
             case StripMode.Compact:
                 return (Px(CompactContentWidth() + CompactPaddingDip, dpiScale), taskbarThickness);
             case StripMode.Floating:
-                return (Px(FullContentWidth() + HorizontalPaddingDip + 2 * CapsulePaddingXDip, dpiScale),
-                        Px(2 * lineHeight + 2 * CapsulePaddingYDip, dpiScale));
+                return (Px(FullContentWidth() + HorizontalPaddingDip + 2 * FloatingPaddingXDip, dpiScale),
+                        Px(2 * lineHeight + 2 * FloatingPaddingYDip, dpiScale));
             case StripMode.Vertical:
                 // Natural size; StripLayout scales it down uniformly if the side taskbar is narrower.
                 var unitHeight = MeasureText(WidestUnit, CompactFontSizeDip, out _).Height;
@@ -297,13 +299,13 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         if (compact) CompactGrid.Width = CompactContentWidth();
 
         var floating = mode == StripMode.Floating;
-        Inner.Margin = floating ? new Thickness(CapsulePaddingXDip, CapsulePaddingYDip, CapsulePaddingXDip, CapsulePaddingYDip)
+        Inner.Margin = floating ? new Thickness(FloatingPaddingXDip, FloatingPaddingYDip, FloatingPaddingXDip, FloatingPaddingYDip)
             : compact ? new Thickness(CompactPaddingDip / 2, 0, CompactPaddingDip / 2, 0)
             : vertical ? new Thickness(VerticalPaddingDip)
             : new Thickness(HorizontalPaddingDip / 2, 0, HorizontalPaddingDip / 2, 0);
         Root.BorderThickness = new Thickness(floating ? 1 : 0);
-        Root.CornerRadius = new CornerRadius(floating ? 100 : 0);   // clamped to half the height by the border
-        ApplyCapsuleBrushes();
+        Root.CornerRadius = new CornerRadius(floating ? FloatingCornerRadiusDip : 0);
+        ApplyFloatingBrushes();
     }
 
     private void OnThemeChanged() => ApplyTheme();
@@ -320,7 +322,7 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         VerticalDownNumber.Foreground = number;
         VerticalDownUnit.Foreground = number;
         ApplyArrowBrushes();
-        ApplyCapsuleBrushes();
+        ApplyFloatingBrushes();
     }
 
     /// <summary>
@@ -345,11 +347,11 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         VerticalDownArrow.Foreground = down;
     }
 
-    private void ApplyCapsuleBrushes()
+    private void ApplyFloatingBrushes()
     {
         if (_mode == StripMode.Floating)
         {
-            // Solid, Mica-like surface so the capsule reads on any wallpaper.
+            // Solid, Mica-like surface so the floating strip reads on any wallpaper.
             var light = _theme.SystemUsesLightTheme;
             Root.Background = Frozen(light ? Color.FromRgb(0xF3, 0xF3, 0xF3) : Color.FromRgb(0x2C, 0x2C, 0x2C));
             Root.BorderBrush = Frozen(light ? Color.FromArgb(0x26, 0, 0, 0) : Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF));
