@@ -3,7 +3,7 @@
 ; Expects the framework-dependent publish output in out/fd-x64 (see .github/workflows/release.yml).
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #define AppVersion "1.0.0"
 #endif
 
 #define AppName "NetStrip"
