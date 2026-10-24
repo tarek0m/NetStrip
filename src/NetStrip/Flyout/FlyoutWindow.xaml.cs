@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -29,6 +30,7 @@ public partial class FlyoutWindow : Window
     private readonly ISettingsStore _settings;
     private readonly ThemeColors _theme;
     private readonly ObservableCollection<string> _notices = [];
+    private readonly AdapterViewSwitcher _views = new();
 
     private Sample? _last;
     private volatile bool _visibleFlag;
@@ -67,6 +69,8 @@ public partial class FlyoutWindow : Window
         var handle = new WindowInteropHelper(this).EnsureHandle();
         UpdateBackdrop();
 
+        // Browsing other adapters is a quick look: every open starts on what the strip shows.
+        _views.Reset();
         RefreshAll();
 
         var dpi = Monitors.DpiScaleNear(stripScreenRect);
@@ -196,12 +200,16 @@ public partial class FlyoutWindow : Window
         var units = _settings.Current.Units;
         Graph.Units = units;
 
-        UpdateHeader();
+        UpdateViews();
+        var view = _views.Current;
+        if (!ReferenceEquals(Graph.View, view)) Graph.View = view;
+        UpdateHeader(view);
 
         if ((_last ?? (_graph.Items.Count > 0 ? _graph.Items[^1] : null)) is { } s)
         {
-            SetText(LiveUp, SpeedFormatter.FormatSpeed(s.UpBytesPerSec, units));
-            SetText(LiveDown, SpeedFormatter.FormatSpeed(s.DownBytesPerSec, units));
+            var (up, down) = view.RatesFor(s);
+            SetText(LiveUp, SpeedFormatter.FormatSpeed(up, units));
+            SetText(LiveDown, SpeedFormatter.FormatSpeed(down, units));
         }
         else
         {
@@ -211,8 +219,8 @@ public partial class FlyoutWindow : Window
         AutomationProperties.SetName(LiveUp, $"Upload {LiveUp.Text}");
         AutomationProperties.SetName(LiveDown, $"Download {LiveDown.Text}");
 
-        var today = _usage.Today(AdapterIds.All);
-        var period = _usage.ThisPeriod(AdapterIds.All);
+        var today = _usage.Today(view.UsageScope);
+        var period = _usage.ThisPeriod(view.UsageScope);
         SetText(TodayDown, "↓ " + SpeedFormatter.FormatTotal(today.DownBytes));
         SetText(TodayUp, "↑ " + SpeedFormatter.FormatTotal(today.UpBytes));
         SetText(PeriodDown, "↓ " + SpeedFormatter.FormatTotal(period.DownBytes));
@@ -226,11 +234,20 @@ public partial class FlyoutWindow : Window
         Graph.Refresh();
     }
 
-    private void UpdateHeader()
+    /// <summary>Rebuilds the adapter views from the current setting and adapters; the arrows show only with more than one.</summary>
+    private void UpdateViews()
+    {
+        _views.Update(_settings.Current.Adapter, _source.CurrentAdapter?.Id, _source.Adapters);
+        ViewSwitcher.Visibility = _views.CanSwitch ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void UpdateHeader(AdapterView view)
     {
         string glyph, name, detail, accessible;
-        var adapter = _source.CurrentAdapter;
-        if (string.Equals(_settings.Current.Adapter, AdapterIds.All, StringComparison.OrdinalIgnoreCase))
+        var adapter = view.Kind == AdapterViewKind.Adapter ? view.Adapter : _source.CurrentAdapter;
+        if (view.Kind == AdapterViewKind.AllAdapters
+            || (view.Kind == AdapterViewKind.Configured
+                && string.Equals(_settings.Current.Adapter, AdapterIds.All, StringComparison.OrdinalIgnoreCase)))
         {
             // Speeds are the sum of every adapter, so there is no single "current" one to show.
             var connected = _source.Adapters.Count(IsConnected);
@@ -272,8 +289,25 @@ public partial class FlyoutWindow : Window
         SetText(HeaderName, name);
         SetText(HeaderIp, detail);
         HeaderIp.Visibility = detail.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        if (_views.CanSwitch) accessible += $", {_views.Index + 1} of {_views.Views.Count}";
         AutomationProperties.SetName(HeaderPanel, accessible);
     }
+
+    /// <summary>Shows the previous or next adapter view (flyout only: the strip and settings are untouched).</summary>
+    private void SwitchView(bool next)
+    {
+        UpdateViews();
+        if (!(next ? _views.Next() : _views.Previous())) return;
+        RefreshAll();
+
+        // The header is a polite live region: a screen reader announces the new view while focus stays on the arrow.
+        if (AutomationPeer.ListenerExists(AutomationEvents.LiveRegionChanged))
+            UIElementAutomationPeer.CreatePeerForElement(HeaderPanel)?.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+    }
+
+    private void OnPreviousViewClick(object sender, RoutedEventArgs e) => SwitchView(next: false);
+
+    private void OnNextViewClick(object sender, RoutedEventArgs e) => SwitchView(next: true);
 
     /// <summary>Link up with a usable IPv4 address: not a self-assigned 169.254.x.x one (link-local, no network).</summary>
     private static bool IsConnected(AdapterInfo a) =>
@@ -313,9 +347,18 @@ public partial class FlyoutWindow : Window
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Escape) return;
-        e.Handled = true;
-        Hide();
+        switch (e.Key)
+        {
+            case Key.Escape:
+                e.Handled = true;
+                Hide();
+                break;
+            // Left/Right switch adapter views; with a single view they keep their usual focus movement.
+            case Key.Left or Key.Right when _views.CanSwitch && Keyboard.Modifiers == ModifierKeys.None:
+                e.Handled = true;
+                SwitchView(next: e.Key == Key.Right);
+                break;
+        }
     }
 
     private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)

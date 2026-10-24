@@ -32,17 +32,36 @@
     <Border BorderThickness="1" BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
         <StackPanel Margin="16,14,16,12">
 
-            <!-- 1. Header: adapter kind glyph, name, IPv4 -->
-            <Grid x:Name="HeaderPanel" AutomationProperties.Name="Connection">
+            <!-- 1. Header: adapter kind glyph, name, IPv4; previous/next adapter view (hidden with one view) -->
+            <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <TextBlock x:Name="HeaderGlyph" Style="{StaticResource Glyph}" FontSize="22" Margin="0,0,12,0"
-                           VerticalAlignment="Center" Text="&#xE839;" />
-                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock x:Name="HeaderName" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                    <TextBlock x:Name="HeaderIp" Style="{StaticResource Caption}" />
+                <Grid x:Name="HeaderPanel" AutomationProperties.Name="Connection" AutomationProperties.LiveSetting="Polite">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="HeaderGlyph" Style="{StaticResource Glyph}" FontSize="22" Margin="0,0,12,0"
+                               VerticalAlignment="Center" Text="&#xE839;" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="HeaderName" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock x:Name="HeaderIp" Style="{StaticResource Caption}" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Grid>
+                <StackPanel x:Name="ViewSwitcher" Grid.Column="1" Orientation="Horizontal" Margin="8,0,0,0"
+                            VerticalAlignment="Center" Visibility="Collapsed">
+                    <Button x:Name="PreviousViewButton" Width="32" Height="32" Padding="0"
+                            AutomationProperties.Name="Previous adapter" ToolTip="Previous adapter (Left arrow)"
+                            Click="OnPreviousViewClick">
+                        <TextBlock Style="{StaticResource Glyph}" Text="&#xE76B;" FontSize="12" />
+                    </Button>
+                    <Button x:Name="NextViewButton" Width="32" Height="32" Padding="0" Margin="4,0,0,0"
+                            AutomationProperties.Name="Next adapter" ToolTip="Next adapter (Right arrow)"
+                            Click="OnNextViewClick">
+                        <TextBlock Style="{StaticResource Glyph}" Text="&#xE76C;" FontSize="12" />
+                    </Button>
                 </StackPanel>
             </Grid>
 
