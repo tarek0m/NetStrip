@@ -53,6 +53,7 @@ internal sealed class AppHost : IDisposable
     private readonly CancellationTokenSource _cts = new();
 
     private ThemeColors _theme = null!;
+    private DeferredTheme _themeMode = null!;
     private SettingsStore _settings = null!;
     private UsageStore _usage = null!;
     private Win32InterfaceTable? _table;
@@ -127,7 +128,8 @@ internal sealed class AppHost : IDisposable
 
         _theme = new ThemeColors();
         _theme.StartListening();
-        ApplyThemeMode(cfg.Theme);
+        // Only remembered: the Fluent theme loads when Fluent-styled UI first appears (EnsureTheme).
+        _themeMode = new DeferredTheme(cfg.Theme, ApplyThemeMode);
         _hideInFullscreen = cfg.HideInFullscreen;
 
         _fullscreen = new FullscreenWatcher(_log);
@@ -180,6 +182,7 @@ internal sealed class AppHost : IDisposable
         strip.SettingsRequested += ShowSettings;
         strip.ExitRequested += RequestExit;
         strip.PauseToggled += SetPaused;
+        strip.ThemeNeeded += EnsureTheme;
         strip.SetPaused(_paused);
         if (key == PrimaryKey)
         {
@@ -309,7 +312,7 @@ internal sealed class AppHost : IDisposable
             if (_sampler is not null) _sampler.AdapterSetting = cfg.Adapter;
             _host.Scope = cfg.Monitors;
             ApplyCapSettings(cfg);
-            ApplyThemeMode(cfg.Theme);
+            _themeMode.Set(cfg.Theme);
 
             if (_hideInFullscreen != cfg.HideInFullscreen)
             {
@@ -350,6 +353,28 @@ internal sealed class AppHost : IDisposable
         _usage.CapScope = cfg.CapAdapter;
     }
 
+    /// <summary>
+    /// Loads the Fluent theme (<see cref="Application.ThemeMode"/>) the first time Fluent-styled UI is about to appear:
+    /// the flyout, the settings window, or the strip's menu or tooltip. The strip itself draws with ThemeColors, so
+    /// until then PresentationFramework.Fluent stays unloaded. Synchronous: callers rely on the styles existing (and
+    /// Mica.IsAppDark seeing the right mode) when it returns. Later calls are no-ops.
+    /// </summary>
+    private void EnsureTheme(string trigger)
+    {
+        if (_disposed || _themeMode.IsApplied) return;
+        var started = Stopwatch.GetTimestamp();
+        try
+        {
+            _themeMode.Ensure();
+            _log.Info($"Fluent theme loaded ({_themeMode.Desired}) for the {trigger} in {Stopwatch.GetElapsedTime(started).TotalMilliseconds:0} ms");
+        }
+        catch (Exception ex)
+        {
+            // Not retried (DeferredTheme marks it applied first); the window still opens, just without Fluent styles.
+            _log.Error($"Loading the Fluent theme for the {trigger} failed", ex);
+        }
+    }
+
     private void ApplyThemeMode(ThemeSetting theme)
     {
         var mode = theme switch
@@ -373,6 +398,8 @@ internal sealed class AppHost : IDisposable
     private FlyoutWindow GetFlyout()
     {
         if (_flyout is not null) return _flyout;
+        // Before construction: the flyout's DynamicResources, Window style and Mica tint all read the theme.
+        EnsureTheme("flyout");
         var flyout = new FlyoutWindow(_source, _graph, _usage, _settings, _theme);
         flyout.SettingsRequested += ShowSettings;
         flyout.IsVisibleChanged += OnFlyoutVisibleChanged;
@@ -457,6 +484,8 @@ internal sealed class AppHost : IDisposable
             _settingsWindow.Activate();
             return;
         }
+        // Before construction: SettingsWindow.xaml resolves the Fluent styles it is BasedOn with StaticResource, once.
+        EnsureTheme("settings window");
         _settingsWindow = new SettingsWindow(_settings, _source.Adapters);
         _settingsWindow.Closed += (_, _) =>
         {

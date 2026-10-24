@@ -16,6 +16,12 @@
         Typography.NumeralAlignment="Tabular"
         SourceInitialized="OnSourceInitialized"
         Closed="OnClosed">
+    <!-- A style of its own, so the strip never takes the Fluent Window style: when the theme loads later (on first
+         use of the flyout, menu or tooltip) WPF gives every style-less window that style, which would re-template a
+         strip already on screen and detach Root while its menu or tooltip is opening. The strip draws itself. -->
+    <Window.Style>
+        <Style TargetType="Window" />
+    </Window.Style>
     <!-- Width/Height are set from the HWND size in code (FitContentToWindow); top-left so it starts at the HWND origin. -->
     <Border x:Name="Root"
             HorizontalAlignment="Left"
@@ -25,7 +31,9 @@
             ToolTipService.ShowDuration="8000"
             MouseLeftButtonDown="OnMouseLeftButtonDown"
             MouseLeftButtonUp="OnMouseLeftButtonUp"
-            MouseMove="OnMouseMove">
+            MouseMove="OnMouseMove"
+            ContextMenuOpening="OnContextMenuOpening"
+            ToolTipOpening="OnToolTipOpening">
         <Border.ContextMenu>
             <ContextMenu>
                 <MenuItem x:Name="SettingsItem" Header="Settings" AutomationProperties.Name="Settings" Click="OnSettingsClick" />

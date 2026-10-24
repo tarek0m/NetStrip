@@ -22,6 +22,7 @@ Taskbar sparkline, per-app bandwidth, CPU/RAM meters, skins/plugins, speed test,
 ## 2. Platform & stack
 
 - C# / .NET 10 (`net10.0-windows`; no versioned Windows TFM, which would ship the WinRT projection), WPF with the built-in Fluent theme (`ThemeMode`), Mica backdrop via `DwmSetWindowAttribute`.
+- The Fluent theme loads on first use: `Application.ThemeMode` is set (from the `theme` setting) just before the flyout, the settings window, or the strip's context menu or tooltip first appears, and from then on theme changes apply live. The strip draws with its own brushes (and keeps the classic `Window` style), so an idle NetStrip that has shown only the strip never loads `PresentationFramework.Fluent`.
 - Win32 interop via `CsWin32` source generator (no hand-written P/Invoke where avoidable).
 - Tests: xUnit.
 - Packaging: Inno Setup (per-user installer) + self-contained portable zip; built by GitHub Actions on version tags.
@@ -176,6 +177,7 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
 - `Settings`: defaults, migration, unknown-field preservation, invalid-file recovery.
 - `UpdateChecker`: semver comparison, prerelease ignored.
 - `AdapterViewSwitcher`: view order and de-duplication per adapter setting, wrap-around, selection kept by id or falling back, per-view rates and graph peak.
+- `DeferredTheme`: the theme is only remembered until first use, applied once then, and live afterwards.
 
 **Manual checklist (per release, recorded in `docs/manual-test-checklist.md`):**
 - Win11: left vs centered alignment, many tray icons, auto-hide, 100/150/200 % DPI, multi-monitor (`monitors=all`), Explorer restart (`taskkill /f /im explorer.exe`), light/dark switch, fullscreen game + fullscreen video, compact mode trigger, fallback pill (simulate by blocking attach).
