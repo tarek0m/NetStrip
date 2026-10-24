@@ -11,7 +11,8 @@ namespace NetStrip.Flyout;
 
 /// <summary>
 /// Last-60-seconds traffic graph, custom drawn (no chart library): download as a 30 % filled area,
-/// upload as a 1.5 px line, one max label top-left. Redraw by calling <see cref="Refresh"/>.
+/// upload as a 1.5 px line, one max label top-left. Plots <see cref="View"/>'s rates from the shared buffer, scaled to
+/// that view's own peak. Redraw by calling <see cref="Refresh"/>.
 /// </summary>
 public sealed class GraphControl : FrameworkElement
 {
@@ -32,6 +33,7 @@ public sealed class GraphControl : FrameworkElement
 
     private GraphBuffer? _buffer;
     private SpeedUnits _units;
+    private AdapterView _view = AdapterView.Configured;
 
     public Brush Foreground
     {
@@ -64,6 +66,13 @@ public sealed class GraphControl : FrameworkElement
         set { _units = value; Refresh(); }
     }
 
+    /// <summary>Which rates of each sample to plot (the flyout's adapter switcher); the configured view by default.</summary>
+    public AdapterView View
+    {
+        get => _view;
+        set { _view = value; Refresh(); }
+    }
+
     /// <summary>Redraws; call on each sample while the flyout is visible.</summary>
     public void Refresh()
     {
@@ -72,7 +81,7 @@ public sealed class GraphControl : FrameworkElement
 
     protected override AutomationPeer OnCreateAutomationPeer() => new GraphPeer(this);
 
-    private string HelpText => _buffer is null ? "" : $"Peak {SpeedFormatter.AccessibleSpeed(_buffer.Max, _units)}";
+    private string HelpText => _buffer is null ? "" : $"Peak {SpeedFormatter.AccessibleSpeed(_view.PeakRate(_buffer.Items), _units)}";
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -85,7 +94,9 @@ public sealed class GraphControl : FrameworkElement
         if (_buffer is null) return;
 
         var items = _buffer.Items;
-        var max = (double)_buffer.Max;
+        var view = _view;
+        var peak = view.PeakRate(items);
+        var max = (double)peak;
         const int capacity = 60;
         var step = w / (capacity - 1);
         var top = LinePadding;
@@ -102,7 +113,7 @@ public sealed class GraphControl : FrameworkElement
             using (var ctx = area.Open())
             {
                 ctx.BeginFigure(new Point(X(0), top + plotHeight), isFilled: true, isClosed: true);
-                for (var i = 0; i < n; i++) ctx.LineTo(new Point(X(i), Y(items[i].DownBytesPerSec)), true, false);
+                for (var i = 0; i < n; i++) ctx.LineTo(new Point(X(i), Y(view.RatesFor(items[i]).Down)), true, false);
                 ctx.LineTo(new Point(X(n - 1), top + plotHeight), true, false);
             }
             area.Freeze();
@@ -110,8 +121,8 @@ public sealed class GraphControl : FrameworkElement
             var line = new StreamGeometry();
             using (var ctx = line.Open())
             {
-                ctx.BeginFigure(new Point(X(0), Y(items[0].UpBytesPerSec)), isFilled: false, isClosed: false);
-                for (var i = 1; i < n; i++) ctx.LineTo(new Point(X(i), Y(items[i].UpBytesPerSec)), true, true);
+                ctx.BeginFigure(new Point(X(0), Y(view.RatesFor(items[0]).Up)), isFilled: false, isClosed: false);
+                for (var i = 1; i < n; i++) ctx.LineTo(new Point(X(i), Y(view.RatesFor(items[i]).Up)), true, true);
             }
             line.Freeze();
 
@@ -124,7 +135,7 @@ public sealed class GraphControl : FrameworkElement
         }
 
         var text = new FormattedText(
-            SpeedFormatter.FormatSpeed(_buffer.Max, _units),
+            SpeedFormatter.FormatSpeed(peak, _units),
             CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
             new Typeface(new FontFamily("Segoe UI Variable Small, Segoe UI"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal),
             LabelFontSize, Foreground, VisualTreeHelper.GetDpi(this).PixelsPerDip);

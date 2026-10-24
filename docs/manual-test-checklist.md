@@ -35,3 +35,4 @@ Run this checklist for every release (spec §13). Record the build version, date
 - [ ] Sleep and resume
 - [ ] Switch from Wi-Fi to Ethernet
 - [ ] Switch from Ethernet to Wi-Fi
+- [ ] Flyout adapter arrows: with Wi-Fi + Ethernet, ◀ ▶ (and Left/Right keys) page through the views and the header, speeds, graph and totals follow; reopening starts on the configured view; with one adapter the arrows are hidden; Narrator reads the arrows and the new view

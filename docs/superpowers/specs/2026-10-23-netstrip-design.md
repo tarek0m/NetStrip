@@ -116,9 +116,10 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
 - Closes on deactivation or Esc.
 - Sections:
   1. **Header:** adapter kind icon, adapter name, IPv4 address (or "Disconnected"). An adapter whose link is down (operational status not up, or media disconnected, read every tick) shows a disconnected icon, its name and "Disconnected", never a stale address. With the adapter setting on "All adapters": a network icon, "All adapters" and "N connected" (adapters with a non-link-local IPv4 address), or "None connected".
-  2. **Graph:** last 60 samples; download as filled area (accent, 30 % fill), upload as 1.5 px line (teal); y-axis auto-scales to the max in window with a single max label. Custom-drawn `Polyline`/`Path`, no chart library.
+     - **Adapter switcher:** ◀ ▶ buttons at the right of the header ("Previous adapter" / "Next adapter"; Left/Right arrow keys while the flyout has focus) page through views, wrapping at the ends: first the configured view (what the strip shows, as above), then "All adapters" (unless the configured view already shows every adapter), then each included adapter, connected ones first, otherwise in the sampler's order. A view that would repeat the configured one is left out (the configured adapter, the current best route in `auto`, and with a single adapter both "All adapters" and that adapter), so the arrows are hidden when only one view remains. A view changes only the flyout: header, graph, live speeds and Today / This cycle totals follow it (an adapter view uses that adapter's rates from `Sample.Traffic` and `Today(id)` / `ThisPeriod(id)`; "All adapters" sums them and uses `all`); the cap bar keeps the cap's own scope, and the strip and settings are never changed. Each open starts on the configured view; if the viewed adapter disappears (or becomes the configured view's adapter), the flyout falls back to the configured view. The header's accessible name includes "k of n" and the header is a polite live region, announced on each switch. View logic: `AdapterViewSwitcher` (Core).
+  2. **Graph:** last 60 samples of the selected view's rates (projected from the same buffer); download as filled area (accent, 30 % fill), upload as 1.5 px line (teal); y-axis auto-scales to that view's max in window (floor 1024 B/s) with a single max label. Custom-drawn `Polyline`/`Path`, no chart library.
   3. **Live:** current ↑ / ↓ in larger type.
-  4. **Totals:** Today ↓/↑ and This cycle ↓/↑ (the data-cap cycle, starting on the "Cycle resets on day" setting); cap progress bar + "x of y GB" when a cap is set (bar turns warning color ≥ 80 %, critical ≥ 100 %).
+  4. **Totals:** Today ↓/↑ and This cycle ↓/↑ for every adapter, or the selected adapter view's own (the data-cap cycle, starting on the "Cycle resets on day" setting); cap progress bar + "x of y GB" when a cap is set (bar turns warning color ≥ 80 %, critical ≥ 100 %).
   5. **Footer:** settings gear; "New version available — vX.Y" link (opens release page in browser) when applicable; one-time notices (fallback mode, usage reset).
 
 ## 9. FullscreenWatcher
@@ -172,11 +173,13 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
 - `UsageStore` with fake clock/filesystem: midnight rollover, DST transitions, reset-day periods (incl. day 28 and short months), cap thresholds firing once per period, retention pruning, corrupt-file recovery, atomic save.
 - `Settings`: defaults, migration, unknown-field preservation, invalid-file recovery.
 - `UpdateChecker`: semver comparison, prerelease ignored.
+- `AdapterViewSwitcher`: view order and de-duplication per adapter setting, wrap-around, selection kept by id or falling back, per-view rates and graph peak.
 
 **Manual checklist (per release, recorded in `docs/manual-test-checklist.md`):**
 - Win11: left vs centered alignment, many tray icons, auto-hide, 100/150/200 % DPI, multi-monitor (`monitors=all`), Explorer restart (`taskkill /f /im explorer.exe`), light/dark switch, fullscreen game + fullscreen video, compact mode trigger, fallback pill (simulate by blocking attach).
 - Win10 22H2 VM: bottom/top/side taskbar, small taskbar buttons.
 - Sleep/resume and Wi-Fi ↔ Ethernet switch.
+- Flyout adapter arrows with Wi-Fi + Ethernet (and hidden with one adapter), keyboard and Narrator.
 
 ## 14. Release
 
