@@ -190,12 +190,13 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
 
     // ---- Data ---------------------------------------------------------------------------------
 
-    public void Show(Sample s, Totals today, SpeedUnits units, bool idleFadeEnabled)
+    /// <param name="cap">This cycle's data-cap progress in bytes; null when no cap is set.</param>
+    public void Show(Sample s, Totals today, (long Used, long Cap)? cap, SpeedUnits units, bool idleFadeEnabled)
     {
         // Moving to a taskbar on another monitor can change the window's DPI after placement.
         if (VisualTreeHelper.GetDpi(this).DpiScaleX != _fittedDpiScale) FitContentToWindow();
 
-        var changes = _vm.Update(s, today, units);
+        var changes = _vm.Update(s, today, cap, units);
 
         if ((changes & StripViewModel.Changes.Up) != 0)
         {
@@ -213,6 +214,7 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
             CompactUpRun.Text = _vm.CompactUp;
         }
         if ((changes & StripViewModel.Changes.Tooltip) != 0) Root.ToolTip = _vm.Tooltip;
+        if ((changes & StripViewModel.Changes.Cap) != 0) ApplyArrowBrushes();
         if ((changes & StripViewModel.Changes.Name) != 0)
         {
             AutomationProperties.SetName(Root, _vm.AccessibleName);
@@ -290,13 +292,30 @@ public partial class StripWindow : Window, IStripSurface, IDisposable
         VerticalUpUnit.Foreground = number;
         VerticalDownNumber.Foreground = number;
         VerticalDownUnit.Foreground = number;
-        UpArrow.Foreground = _theme.UploadBrush;
-        CompactUpArrow.Foreground = _theme.UploadBrush;
-        VerticalUpArrow.Foreground = _theme.UploadBrush;
-        DownArrow.Foreground = _theme.DownloadBrush;
-        CompactDownArrow.Foreground = _theme.DownloadBrush;
-        VerticalDownArrow.Foreground = _theme.DownloadBrush;
+        ApplyArrowBrushes();
         ApplyCapsuleBrushes();
+    }
+
+    /// <summary>
+    /// Upload/download colours normally; every arrow in every layout turns amber at 80 % of the data cap and red at
+    /// 100 %, so the cap shows without opening the flyout (the tooltip carries the same state as text).
+    /// </summary>
+    private void ApplyArrowBrushes()
+    {
+        var capBrush = _vm.CapLevel switch
+        {
+            CapLevel.Reached100 => _theme.CapCriticalBrush,
+            CapLevel.Warning80 => _theme.CapWarningBrush,
+            _ => null,
+        };
+        var up = capBrush ?? _theme.UploadBrush;
+        var down = capBrush ?? _theme.DownloadBrush;
+        UpArrow.Foreground = up;
+        CompactUpArrow.Foreground = up;
+        VerticalUpArrow.Foreground = up;
+        DownArrow.Foreground = down;
+        CompactDownArrow.Foreground = down;
+        VerticalDownArrow.Foreground = down;
     }
 
     private void ApplyCapsuleBrushes()

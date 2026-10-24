@@ -186,7 +186,8 @@ internal sealed class AppHost : IDisposable
             strip.FloatingMoved += OnFloatingMoved;
         }
         if (_hideInFullscreen && key == _fullscreenKey) strip.SetHidden(true);
-        if (_lastSample is { } s) strip.Show(s, _usage.Today(ScopeFor(_settings.Current, s)), _settings.Current.Units, _settings.Current.IdleFade);
+        if (_lastSample is { } s)
+            strip.Show(s, _usage.Today(ScopeFor(_settings.Current, s)), _usage.CapProgress(), _settings.Current.Units, _settings.Current.IdleFade);
         return strip;
     }
 
@@ -217,9 +218,10 @@ internal sealed class AppHost : IDisposable
                 _lastSample = s;
                 var cfg = _settings.Current;
                 var today = _usage.Today(ScopeFor(cfg, s));
+                var cap = _usage.CapProgress();
                 foreach (var surface in _host.Surfaces.Values)
                 {
-                    if (surface is StripWindow strip) strip.Show(s, today, cfg.Units, cfg.IdleFade);
+                    if (surface is StripWindow strip) strip.Show(s, today, cap, cfg.Units, cfg.IdleFade);
                 }
                 _graph.Push(s);
             }
@@ -300,8 +302,8 @@ internal sealed class AppHost : IDisposable
             {
                 if (surface is not StripWindow strip) continue;
                 if (key == PrimaryKey) strip.FloatingPosition = cfg.FloatingPosition;
-                // Units and idle fade show immediately instead of on the next tick.
-                if (_lastSample is { } s) strip.Show(s, _usage.Today(ScopeFor(cfg, s)), cfg.Units, cfg.IdleFade);
+                // Units, idle fade and cap changes show immediately instead of on the next tick.
+                if (_lastSample is { } s) strip.Show(s, _usage.Today(ScopeFor(cfg, s)), _usage.CapProgress(), cfg.Units, cfg.IdleFade);
             }
 
             if (!cfg.CheckForUpdates && _update is not null)
