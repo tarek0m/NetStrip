@@ -65,6 +65,7 @@ internal sealed class AppHost : IDisposable
     private DispatcherTimer? _updateTimer;
     private DispatcherTimer? _trimTimer;
     private UpdateChecker? _updates;
+    private TrayNotification? _notification;
 
     private FlyoutWindow? _flyout;
     private SettingsWindow? _settingsWindow;
@@ -266,12 +267,30 @@ internal sealed class AppHost : IDisposable
         try
         {
             _log.Info($"Data cap threshold crossed: {level}");
-            if (_usage.CapProgress() is { } progress) Toasts.CapWarning(level, progress.Used, progress.Cap);
+            if (_usage.CapProgress() is not { } progress ||
+                CapWarning.Message(level, progress.Used, progress.Cap) is not { } message) return;
+            // The notice keeps the warning in the flyout in case the Windows notification is missed.
+            AddNotice(message);
+            ShowNotification(message);
         }
         catch (Exception ex)
         {
             _log.Error("Showing the data cap warning failed", ex);
         }
+    }
+
+    /// <summary>Windows notification; clicking it opens the flyout.</summary>
+    private void ShowNotification(string message)
+    {
+        if (_notification is null)
+        {
+            _notification = new TrayNotification(_log);
+            _notification.Clicked += () =>
+            {
+                if (!_disposed) ShowFlyout(null);
+            };
+        }
+        _notification.Show("NetStrip", message);
     }
 
     // ---- Settings -----------------------------------------------------------------------------------------
@@ -550,6 +569,7 @@ internal sealed class AppHost : IDisposable
 
         Try("closing the settings window", () => _settingsWindow?.Close());
         Try("closing the flyout", () => _flyout?.Close());
+        Try("removing the notification icon", () => _notification?.Dispose());
         if (_host is not null)
         {
             _host.FallbackActivated -= OnFallbackActivated;

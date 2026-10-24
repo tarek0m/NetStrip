@@ -1,13 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <!-- Plain net10.0-windows: a versioned TFM (net10.0-windows10.0.x) adds the 25 MB WinRT projection to the output. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- That TFM also set the platform analyzer's floor (CA1416); keep it at Windows 10 2004, as the installer does. -->
+    <GenerateSupportedOSPlatformAttribute>false</GenerateSupportedOSPlatformAttribute>
     <UseWPF>true</UseWPF>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- Pointer-sized window-long APIs exist only as arch-specific metadata; x64 and arm64 share the same Ptr signatures. -->
     <CsWin32PlatformTarget>x64</CsWin32PlatformTarget>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\NetStrip.ico</ApplicationIcon>
+    <!-- Windows names the cap notification after the exe's FileDescription (from AssemblyTitle); pin it, not the AssemblyName default. -->
+    <AssemblyTitle>NetStrip</AssemblyTitle>
+    <Product>NetStrip</Product>
     <!-- Working-set budget (spec: ≤ 60 MB): no PGO instrumentation for an app that does a little work once a second. -->
     <TieredPGO>false</TieredPGO>
     <!-- NetStrip is English-only: don't ship the framework's translated resources (about 9 MB in the standalone build). -->
@@ -20,8 +26,12 @@
     <RuntimeHostConfigurationOption Include="System.GC.Gen0MaxBudget" Value="4194304" />
   </ItemGroup>
   <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.Versioning.SupportedOSPlatformAttribute">
+      <_Parameter1>windows10.0.19041</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.367" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
   </ItemGroup>
   <ItemGroup>
     <!-- CsWin32 already adds the project-root NativeMethods.txt; this glob adds folder-level files exactly once. -->
