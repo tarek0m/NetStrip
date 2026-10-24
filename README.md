@@ -39,6 +39,11 @@ dotnet test
 dotnet run --project src/NetStrip
 ```
 
+Command-line options (for development and testing):
+
+- `--fake`: show simulated traffic instead of reading the network adapters. Usage counted in this mode is not saved.
+- `--exit-after <seconds>`: exit by itself after that many seconds (up to 86400), through the same path as choosing Exit. Invalid values are ignored with a warning in the log.
+
 Projects:
 
 - `src/NetStrip`: WPF app (taskbar strip, flyout, settings, startup).
