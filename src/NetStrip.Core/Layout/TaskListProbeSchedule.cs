@@ -3,8 +3,9 @@ namespace NetStrip.Core.Layout;
 /// <summary>
 /// Decides which taskbars the task-list probe should look at and when the next periodic probe is due (spec §6
 /// Centered-icon overlap). The app-button row on Windows 11's XAML taskbar grows without any HWND moving, so no
-/// location event reports it; the host re-probes on a fixed cadence instead. Probes triggered by an attach pass are
-/// not gated by this schedule, but their completion still counts, so a periodic probe never follows one closely.
+/// location event reports it; the host probes when the shell hook reports a taskbar window created or destroyed, and
+/// on this slower fixed cadence as a safety net. Probes triggered otherwise (attach, reposition, shell hook) are not
+/// gated by this schedule, but their completion still counts, so a periodic probe never follows one closely.
 /// <c>now</c> is any monotonic time the caller keeps (it must not restart with Explorer). Not thread-safe; use from
 /// the UI thread.
 /// </summary>

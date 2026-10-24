@@ -35,7 +35,15 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(50);
     private static readonly TimeSpan HealthCheckInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan BusyRetryDelay = TimeSpan.FromMilliseconds(100);
-    private static readonly TimeSpan PeriodicProbeInterval = TimeSpan.FromSeconds(30);
+    // Safety net only: opening and closing apps triggers a probe through the shell hook (ShellChangeProbeDelay later).
+    // This catches what the hook can't see, e.g. pinning or unpinning icons and the search box or widgets changing.
+    private static readonly TimeSpan PeriodicProbeInterval = TimeSpan.FromMinutes(2);
+    // Lets the taskbar's add/remove-button animation settle, and folds a burst of window events into one probe.
+    private static readonly TimeSpan ShellChangeProbeDelay = TimeSpan.FromSeconds(1);
+    private const int HSHELL_WINDOWCREATED = 1;
+    private const int HSHELL_WINDOWDESTROYED = 2;
+    private const int HSHELL_WINDOWREPLACED = 13;
+    private const int HSHELL_CODE_MASK = 0x7FFF;   // strips HSHELL_HIGHBIT
 
     private readonly Dictionary<string, Attachment> _attachments = new();
     private readonly Dictionary<string, IStripSurface> _surfaces = new();
@@ -47,9 +55,12 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
 
     private Dispatcher? _dispatcher;
     private DispatcherTimer? _debounce;
+    private DispatcherTimer? _shellChangeProbe;
     private DispatcherTimer? _maintenance;
     private HwndSource? _messageWindow;
     private uint _taskbarCreatedMessage;
+    private uint _shellHookMessage;
+    private bool _shellHookRegistered;
     private WINEVENTPROC? _winEventProc;              // rooted for the lifetime of the hook (GC safety)
     private HWINEVENTHOOK _hook;
     private uint _hookedPid;
@@ -105,6 +116,13 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
             }
         };
         _debounce = debounce;
+        var shellChangeProbe = new DispatcherTimer(DispatcherPriority.Background, _dispatcher) { Interval = ShellChangeProbeDelay };
+        shellChangeProbe.Tick += (_, _) =>
+        {
+            shellChangeProbe.Stop();
+            RequestProbe();
+        };
+        _shellChangeProbe = shellChangeProbe;
         _maintenance = new DispatcherTimer(DispatcherPriority.Background, _dispatcher);
         _maintenance.Tick += (_, _) => OnMaintenanceTick();
         _winEventProc = OnWinEvent;
@@ -134,12 +152,15 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
         if (_disposed) return;
         _disposed = true;
         _debounce?.Stop();
+        _shellChangeProbe?.Stop();
         _maintenance?.Stop();
         Unhook();
         try
         {
             if (_messageWindow is not null)
             {
+                if (_shellHookRegistered) PInvoke.DeregisterShellHookWindow(new HWND(_messageWindow.Handle));
+                _shellHookRegistered = false;
                 _messageWindow.RemoveHook(WndProc);
                 _messageWindow.Dispose();
                 _messageWindow = null;
@@ -577,6 +598,13 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
         };
         _messageWindow = new HwndSource(parameters);
         _messageWindow.AddHook(WndProc);
+
+        // Shell hook: told when a window that gets a taskbar button is created or destroyed, which is exactly when the
+        // row of app buttons grows or shrinks (XAML inside one window, so no location event reports it).
+        _shellHookMessage = PInvoke.RegisterWindowMessage("SHELLHOOK");
+        _shellHookRegistered = _shellHookMessage != 0 && PInvoke.RegisterShellHookWindow(new HWND(_messageWindow.Handle));
+        if (!_shellHookRegistered)
+            log.Warn($"TaskbarHost: RegisterShellHookWindow failed; app-button changes are caught every {PeriodicProbeInterval.TotalMinutes:0} min instead");
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -586,7 +614,12 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
             var message = unchecked((uint)msg);
             if (_disposed) return IntPtr.Zero;
 
-            if (message == _taskbarCreatedMessage && message != 0)
+            if (message == _shellHookMessage && message != 0)
+            {
+                if (((int)wParam & HSHELL_CODE_MASK) is HSHELL_WINDOWCREATED or HSHELL_WINDOWDESTROYED or HSHELL_WINDOWREPLACED)
+                    ScheduleShellChangeProbe();
+            }
+            else if (message == _taskbarCreatedMessage && message != 0)
             {
                 log.Info("TaskbarHost: TaskbarCreated received (Explorer restarted); re-attaching");
                 _sinceStart.Restart();
@@ -612,10 +645,18 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
 
     // ---- Task-list probe (UI Automation, off the UI thread) ----------------------------------------------
 
+    /// <summary>An app's taskbar button appeared or went away: probe once the taskbar has settled (restarts the delay).</summary>
+    private void ScheduleShellChangeProbe()
+    {
+        if (_shellChangeProbe is null || _disposed) return;
+        _shellChangeProbe.Stop();
+        _shellChangeProbe.Start();
+    }
+
     /// <summary>
     /// Health-check tick (attached, not floating): re-probe once <see cref="PeriodicProbeInterval"/> has passed since
-    /// the last probe finished. Windows 11's app buttons are XAML, so a row of centred icons growing toward the strip
-    /// moves no window and raises no location event; this is what switches the strip to compact and back.
+    /// the last probe finished. Opening and closing apps is caught by the shell hook within about a second; this safety
+    /// net catches the rest (pinned icons, search box, widgets), and everything if the hook could not be registered.
     /// </summary>
     private void RequestPeriodicProbe()
     {

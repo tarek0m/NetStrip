@@ -96,7 +96,7 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
 
 - Use UI Automation to get the bounding rectangle of the taskbar's app-button area (`MSTaskListWClass` on Win10; the `Taskbar.TaskList` UIA element on Win11).
 - If the full strip would overlap it, switch to **compact mode**: single line `↓8.4 ↑1.2 MB/s` at a smaller fixed width. If compact still overlaps, keep compact and log; do not hide.
-- Probe off the UI thread: right after each attach pass and reposition, and every 30 s while attached (not in fallback), never two at once. The Win11 app buttons are XAML, so centred icons growing toward the strip raise no location event; the periodic probe is what switches to compact and back. It only looks at taskbars whose layout uses the result (horizontal ones for the app-button area; secondary ones, any edge, for the XAML clock area), skips strips hidden for fullscreen, and repositions only when a result changed.
+- Probe off the UI thread: right after each attach pass and reposition; 1 s after a window that gets a taskbar button is created, destroyed or replaced (shell hook, `RegisterShellHookWindow`), which is when the app-button row grows or shrinks; and as a safety net every 2 min while attached (not in fallback) for changes the hook can't see (pinning, search box, widgets). Never two at once. The Win11 app buttons are XAML, so centred icons growing toward the strip raise no location event. It only looks at taskbars whose layout uses the result (horizontal ones for the app-button area; secondary ones, any edge, for the XAML clock area), skips strips hidden for fullscreen, and repositions only when a result changed.
 
 ### Fallback
 
