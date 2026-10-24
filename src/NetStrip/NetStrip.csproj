@@ -1,7 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <!-- Plain net10.0-windows: a versioned TFM (net10.0-windows10.0.x) adds the 25 MB WinRT projection to the output. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- That TFM also set the platform analyzer's floor (CA1416); keep it at Windows 10 2004, as the installer does. -->
+    <GenerateSupportedOSPlatformAttribute>false</GenerateSupportedOSPlatformAttribute>
     <UseWPF>true</UseWPF>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- Pointer-sized window-long APIs exist only as arch-specific metadata; x64 and arm64 share the same Ptr signatures. -->
@@ -19,6 +22,11 @@
          through 25-100 MB of fresh pages between collections and the working set creeps up. Cap it at 4 MB: at this
          app's allocation rate that is a tiny gen0 GC every few minutes. -->
     <RuntimeHostConfigurationOption Include="System.GC.Gen0MaxBudget" Value="4194304" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.Versioning.SupportedOSPlatformAttribute">
+      <_Parameter1>windows10.0.19041</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.367" PrivateAssets="all" />

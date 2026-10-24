@@ -21,7 +21,7 @@ Taskbar sparkline, per-app bandwidth, CPU/RAM meters, skins/plugins, speed test,
 
 ## 2. Platform & stack
 
-- C# / .NET 10, WPF with the built-in Fluent theme (`ThemeMode`), Mica backdrop via `DwmSetWindowAttribute`.
+- C# / .NET 10 (`net10.0-windows`; no versioned Windows TFM, which would ship the WinRT projection), WPF with the built-in Fluent theme (`ThemeMode`), Mica backdrop via `DwmSetWindowAttribute`.
 - Win32 interop via `CsWin32` source generator (no hand-written P/Invoke where avoidable).
 - Tests: xUnit.
 - Packaging: Inno Setup (per-user installer) + self-contained portable zip; built by GitHub Actions on version tags.
@@ -71,7 +71,7 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
 - Corrupt file → rename to `usage.json.bad-<timestamp>`, start empty, log, and show a one-time notice in the flyout.
 - File that cannot be read (locked by antivirus/backup/sync; read retried briefly first) → leave it untouched, start empty, log; before the next save, read it again and merge it with this session's usage (or quarantine it if it turns out to be corrupt). Never save over a file that has not been read.
 - Monthly period: from `capResetDay` (1–28, default 1) of the current month to the day before the next reset.
-- Data cap (`capGb`, null = off) applies to the adapter scope set by `capAdapter` (`all` default, or an adapter id). Warnings at 80 % and 100 %, each at most once per period: a Windows notification titled "NetStrip" (`Shell_NotifyIcon` info balloon, which Win10/11 show as a regular notification under the exe's FileDescription; no WinRT) plus a one-time flyout notice with the same text in case the notification is missed. The notification owns a temporary notification-area icon that is removed when the balloon times out, is dismissed or clicked (clicking opens the flyout), or after a fallback delay (Windows' notification display time + 30 s, at least 1 min).
+- Data cap (`capGb`, null = off) applies to the adapter scope set by `capAdapter` (`all` default, or an adapter id). Warnings at 80 % and 100 %, each at most once per period: a Windows notification titled "NetStrip" (`Shell_NotifyIcon` info balloon, which Win10/11 show as a regular notification under the exe's FileDescription; no WinRT, so no 25 MB SDK projection) plus a one-time flyout notice with the same text in case the notification is missed. The notification owns a temporary notification-area icon that is removed when the balloon times out, is dismissed or clicked (clicking opens the flyout), or after a fallback delay (Windows' notification display time + 30 s, at least 1 min).
 - Queries: `Today(adapterScope)`, `ThisPeriod(adapterScope)`, `CapProgress()`.
 
 ## 6. TaskbarHost
