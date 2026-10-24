@@ -1,12 +1,16 @@
 using System.Windows.Automation;
 using NetStrip.Core;
+using NetStrip.Core.Layout;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 
 namespace NetStrip.Shell.Taskbar;
 
-/// <summary>What the probe found on one taskbar (physical screen pixels); null members mean "unknown".</summary>
-internal readonly record struct ProbeResult(PixelRect? TaskList, PixelRect? ClockArea);
+/// <summary>
+/// What the probe found on one taskbar (physical screen pixels); null members mean "unknown" or "none". TrayNeighbor is
+/// taskbar content to the right of the app buttons (Widgets on a left-aligned Win11 taskbar).
+/// </summary>
+internal readonly record struct ProbeResult(PixelRect? TaskList, PixelRect? ClockArea, PixelRect? TrayNeighbor = null);
 
 /// <summary>
 /// Finds the app-button area of a taskbar (spec §6 Centered-icon overlap) and, for secondary taskbars,
@@ -16,6 +20,7 @@ internal static class TaskListProbe
 {
     private const string XamlBridgeClass = "Windows.UI.Composition.DesktopWindowContentBridge";
     private const string TaskbarFrameId = "TaskbarFrame";
+    private const string StartButtonId = "StartButton";
     private const string SystemTrayIconId = "SystemTrayIcon";
     private const string LegacyTaskListClass = "MSTaskListWClass";
 
@@ -51,24 +56,43 @@ internal static class TaskListProbe
         var root = AutomationElement.FromHandle((IntPtr)bridge);
         var cache = new CacheRequest { AutomationElementMode = AutomationElementMode.None };
         cache.Add(AutomationElement.BoundingRectangleProperty);
+        cache.Add(AutomationElement.AutomationIdProperty);
 
         PixelRect? taskList = null;
         PixelRect? clock = null;
+        PixelRect? trayNeighbor = null;
 
         // The TaskbarFrame element itself spans the whole taskbar width (observed on Win11 build 26300), so the
-        // app-button area is the union of its children: Start, Search, Task View, Widgets and the app buttons.
+        // app-button area comes from its children: Start, Search, Task View, Widgets and the app buttons. Widgets is
+        // split off when it sits right of the app buttons (left-aligned taskbar), see TaskbarItems.
         var frame = root.FindFirst(TreeScope.Descendants, new PropertyCondition(AutomationElement.AutomationIdProperty, TaskbarFrameId));
         using (cache.Activate())
         {
             if (frame is not null)
-                taskList = UnionOfCachedBounds(frame.FindAll(TreeScope.Children, Condition.TrueCondition));
+                (taskList, trayNeighbor) = TaskbarItems.Split(CachedItems(frame.FindAll(TreeScope.Children, Condition.TrueCondition)));
 
             // Secondary taskbars on Windows 11 draw the clock in XAML (elements with AutomationId "SystemTrayIcon").
             if (wantClockArea)
                 clock = UnionOfCachedBounds(root.FindAll(TreeScope.Descendants,
                     new PropertyCondition(AutomationElement.AutomationIdProperty, SystemTrayIconId)));
         }
-        return new ProbeResult(taskList, clock);
+        return new ProbeResult(taskList, clock, trayNeighbor);
+    }
+
+    private static List<TaskbarItem> CachedItems(AutomationElementCollection elements)
+    {
+        var items = new List<TaskbarItem>(elements.Count);
+        foreach (AutomationElement element in elements)
+        {
+            var r = element.Cached.BoundingRectangle;
+            if (r.IsEmpty || r.Width <= 0 || r.Height <= 0) continue;
+            var left = (int)Math.Floor(r.Left);
+            var top = (int)Math.Floor(r.Top);
+            items.Add(new TaskbarItem(
+                new PixelRect(left, top, (int)Math.Ceiling(r.Right) - left, (int)Math.Ceiling(r.Bottom) - top),
+                element.Cached.AutomationId == StartButtonId));
+        }
+        return items;
     }
 
     private static PixelRect? UnionOfCachedBounds(AutomationElementCollection elements)

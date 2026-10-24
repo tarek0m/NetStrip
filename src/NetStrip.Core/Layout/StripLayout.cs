@@ -4,7 +4,9 @@ namespace NetStrip.Core.Layout;
 /// One taskbar's geometry in physical screen pixels. <paramref name="Tray"/> is the notification area
 /// (or the clock area on secondary taskbars), <paramref name="TaskList"/> the app-button area; either may be unknown.
 /// </summary>
-public sealed record TaskbarGeometry(PixelRect Taskbar, PixelRect? Tray, PixelRect? TaskList, TaskbarEdge Edge, double DpiScale);
+/// <param name="TrayNeighbor">Taskbar content between the app buttons and the tray (Widgets on a left-aligned Win11 taskbar).</param>
+public sealed record TaskbarGeometry(PixelRect Taskbar, PixelRect? Tray, PixelRect? TaskList, TaskbarEdge Edge, double DpiScale,
+    PixelRect? TrayNeighbor = null);
 
 /// <summary>Pure placement rules for the strip (spec §6).</summary>
 public static class StripLayout
@@ -82,7 +84,10 @@ public static class StripLayout
         int padding, out bool crowded)
     {
         crowded = false;
-        var right = (g.Tray is { } tray ? tray.X : Right(g.Taskbar)) - padding;
+        // Right edge: the tray, or whatever sits between the app buttons and the tray (Widgets on a left-aligned taskbar).
+        var limit = g.Tray is { } tray ? tray.X : Right(g.Taskbar);
+        if (g.TrayNeighbor is { } neighbor) limit = Math.Min(limit, neighbor.X);
+        var right = limit - padding;
         PixelRect At((int W, int H) size) =>
             new(right - size.W, g.Taskbar.Y + (g.Taskbar.Height - size.H) / 2, size.W, size.H);
 

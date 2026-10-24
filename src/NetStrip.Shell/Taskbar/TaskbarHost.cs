@@ -436,7 +436,7 @@ public sealed class TaskbarHost(Func<string, IStripSurface> createSurface, ILog 
     {
         var g = located.Geometry;
         _probeResults.TryGetValue(located.Hwnd, out var probe);
-        g = g with { TaskList = probe.TaskList, Tray = g.Tray ?? probe.ClockArea };
+        g = g with { TaskList = probe.TaskList, Tray = g.Tray ?? probe.ClockArea, TrayNeighbor = probe.TrayNeighbor };
 
         var vertical = StripLayout.IsVertical(g.Edge);
         var thickness = vertical ? g.Taskbar.Width : g.Taskbar.Height;

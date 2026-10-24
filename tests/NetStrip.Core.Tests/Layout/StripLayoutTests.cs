@@ -124,6 +124,21 @@ public class StripLayoutTests
     }
 
     [Fact]
+    public void TrayNeighbor_IsTheRightEdge_InsteadOfTheTray()
+    {
+        // Left-aligned taskbar: app buttons end at 600, the weather sits at 1500..1650 before the tray at 1700.
+        var g = new TaskbarGeometry(BottomTaskbar, BottomTray, new PixelRect(0, 1040, 600, 48), TaskbarEdge.Bottom, 1.0,
+            TrayNeighbor: new PixelRect(1500, 1040, 150, 48));
+
+        var (bounds, mode) = StripLayout.Place(g, Full, Compact, Vertical, Padding, out var crowded);
+
+        // Right edge = 1500 - 4 = 1496 -> x = 1406: left of the weather, plenty of room, not crowded.
+        Assert.Equal(StripMode.Full, mode);
+        Assert.False(crowded);
+        Assert.Equal(new PixelRect(1406, 4, 90, 40), bounds);
+    }
+
+    [Fact]
     public void TaskListTouchingButNotOverlapping_StaysFull()
     {
         // App buttons end exactly where the full strip starts (1606): edges touching is not an overlap.
