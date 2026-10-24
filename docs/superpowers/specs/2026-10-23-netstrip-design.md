@@ -65,7 +65,7 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
 ## 5. UsageStore
 
 - Per adapter id: daily buckets `{date (local), upBytes, downBytes}`.
-- Each `Sample` adds to the current local day; day boundary uses `IClock.Now` local date (DST-safe because buckets are keyed by date, not by 24 h spans).
+- Each `Sample` carries every included adapter's exact byte delta since the previous tick (`Sample.Traffic`), whatever adapter is displayed; each adapter's bytes go to its own bucket for the current local day. So usage is exact (no rate × 1 s approximation), counts across sleep gaps, and "all" totals and the data cap include every adapter even when the display follows the best route. Day boundary uses `IClock.Now` local date (DST-safe because buckets are keyed by date, not by 24 h spans). Older files may also contain an `all` key (from all-adapters mode before per-adapter recording); it still counts toward "all" totals.
 - Persist to `%AppData%\NetStrip\usage.json` every 60 s and on shutdown, via write-to-temp + `File.Replace` (atomic).
 - Retention: 13 months; older buckets pruned on load and at day rollover. A date is pruned only if it is also older than the 397th most recent date with data, so a clock that jumps forward can never wipe the history.
 - Corrupt file → rename to `usage.json.bad-<timestamp>`, start empty, log, and show a one-time notice in the flyout.

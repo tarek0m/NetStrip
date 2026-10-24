@@ -120,26 +120,26 @@ public sealed class UsageStore(string path, IClock clock, IFileSystem fs, ILog l
         }
     }
 
-    /// <summary>Adds one second's worth of traffic to the current local day.</summary>
+    /// <summary>
+    /// Adds a sample's traffic to the current local day: each adapter's exact bytes from <see cref="Sample.Traffic"/>,
+    /// or, for a sample without it, one second at the sample's rate under its adapter id.
+    /// </summary>
     public void Add(Sample s)
     {
-        var up = Math.Max(0, s.UpBytesPerSec);
-        var down = Math.Max(0, s.DownBytesPerSec);
-        if (up == 0 && down == 0) return;
-
         CapLevel? crossed;
         lock (_gate)
         {
             var today = LocalToday();
-            if (today != _lastPruned) Prune(today);
-
-            if (!_adapters.TryGetValue(s.AdapterId, out var days))
-                _adapters[s.AdapterId] = days = new SortedDictionary<DateOnly, long[]>();
-            if (!days.TryGetValue(today, out var bucket))
-                days[today] = bucket = new long[2];
-            bucket[0] += up;
-            bucket[1] += down;
-            _dirty = true;
+            var added = false;
+            if (s.Traffic is { } traffic)
+            {
+                foreach (var t in traffic) added |= AddBytes(t.AdapterId, today, t.UpBytes, t.DownBytes);
+            }
+            else
+            {
+                added = AddBytes(s.AdapterId, today, s.UpBytesPerSec, s.DownBytesPerSec);
+            }
+            if (!added) return;
 
             crossed = EvaluateCap(today);
         }
@@ -154,6 +154,24 @@ public sealed class UsageStore(string path, IClock clock, IFileSystem fs, ILog l
             // Add runs inside the sampler chain; a failing subscriber must not break counting.
             log.Error("A data cap warning handler failed", ex);
         }
+    }
+
+    /// <summary>Called under <c>_gate</c>. False (and no bucket created) when there is nothing to add.</summary>
+    private bool AddBytes(string adapterId, DateOnly today, long upBytes, long downBytes)
+    {
+        var up = Math.Max(0, upBytes);
+        var down = Math.Max(0, downBytes);
+        if (up == 0 && down == 0) return false;
+        if (today != _lastPruned) Prune(today);
+
+        if (!_adapters.TryGetValue(adapterId, out var days))
+            _adapters[adapterId] = days = new SortedDictionary<DateOnly, long[]>();
+        if (!days.TryGetValue(today, out var bucket))
+            days[today] = bucket = new long[2];
+        bucket[0] += up;
+        bucket[1] += down;
+        _dirty = true;
+        return true;
     }
 
     public Totals Today(string scope)

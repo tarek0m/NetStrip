@@ -234,6 +234,58 @@ public class NetSamplerTests
     }
 
     [Fact]
+    public void Traffic_ListsEveryIncludedAdapter_WhateverIsDisplayed()
+    {
+        _table.Set("a", 0, 0);
+        _table.Set("b", 0, 0);
+        _table.Set("loop", 0, 0, included: false);
+        _table.BestId = "a";
+        var sampler = Create();
+        sampler.Tick();
+
+        _clock.Advance(TimeSpan.FromSeconds(2));
+        _table.Set("a", 2_000, 0);
+        _table.Set("b", 0, 600);
+        _table.Set("loop", 9_999, 9_999, included: false);
+        var s = sampler.Tick();
+
+        Assert.Equal("a", s.AdapterId);                      // auto displays the best route only...
+        Assert.Equal(1_000, s.DownBytesPerSec);
+        Assert.Equal(                                          // ...but usage gets every included adapter
+            [new AdapterTraffic("a", 0, 2_000, 0, 1_000), new AdapterTraffic("b", 600, 0, 300, 0)],
+            s.Traffic!.OrderBy(t => t.AdapterId));
+    }
+
+    [Fact]
+    public void Traffic_BytesCountAfterALongGap_RatesDoNot()
+    {
+        _table.Set("a", 0, 0);
+        _table.BestId = "a";
+        var sampler = Create();
+        sampler.Tick();
+
+        _clock.Advance(TimeSpan.FromMinutes(30));            // e.g. sleep
+        _table.Set("a", 5_000, 700);
+        var s = sampler.Tick();
+
+        Assert.Equal(0, s.DownBytesPerSec);
+        Assert.Equal(new AdapterTraffic("a", 700, 5_000, 0, 0), Assert.Single(s.Traffic!));
+    }
+
+    [Fact]
+    public void Traffic_SkipsNewAndResetAdapters()
+    {
+        _table.Set("a", 1_000, 1_000);
+        var sampler = Create("all");
+        sampler.Tick();
+
+        _clock.Advance(TimeSpan.FromSeconds(1));
+        _table.Set("a", 10, 10);                               // counter reset
+        _table.Set("new", 500, 500);                           // no baseline yet
+        Assert.Empty(sampler.Tick().Traffic!);
+    }
+
+    [Fact]
     public void All_SumsIncludedOnly()
     {
         _table.Set("a", 0, 0);

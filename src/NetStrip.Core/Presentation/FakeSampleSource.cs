@@ -44,9 +44,9 @@ public sealed class FakeSampleSource : ISampleSource, IDisposable
         if (second % CycleSeconds >= CycleSeconds - QuietSeconds)
             return new Sample(time, adapterId, 0, 0);
 
-        var down = 20_000 + 6_000_000 * (0.5 + 0.5 * Math.Sin(second * 0.35));
-        var up = 3_000 + 500_000 * (0.5 + 0.5 * Math.Sin(second * 0.5 + 1.0));
-        return new Sample(time, adapterId, (long)up, (long)down);
+        var down = (long)(20_000 + 6_000_000 * (0.5 + 0.5 * Math.Sin(second * 0.35)));
+        var up = (long)(3_000 + 500_000 * (0.5 + 0.5 * Math.Sin(second * 0.5 + 1.0)));
+        return new Sample(time, adapterId, up, down, [new AdapterTraffic(adapterId, up, down, up, down)]);
     }
 
     public void Dispose() => _timer.Dispose();

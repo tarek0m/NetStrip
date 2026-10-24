@@ -56,6 +56,45 @@ public class UsageStoreTests
     }
 
     [Fact]
+    public void Add_WithTraffic_RecordsEachAdapterInExactBytes()
+    {
+        var store = Create();
+
+        // Displayed as "all" at some rate; usage comes from the per-adapter bytes, not the displayed rate.
+        store.Add(new Sample(DateTimeOffset.UnixEpoch, "all", 999_999, 999_999,
+            [new AdapterTraffic("wifi", 10, 20, 5, 10), new AdapterTraffic("eth", 1, 2, 1, 2)]));
+
+        Assert.Equal(new Totals(10, 20), store.Today("wifi"));
+        Assert.Equal(new Totals(1, 2), store.Today("eth"));
+        Assert.Equal(new Totals(11, 22), store.Today("all"));
+    }
+
+    [Fact]
+    public void Add_WithIdleTraffic_ChangesNothing()
+    {
+        var store = Create();
+
+        store.Add(new Sample(DateTimeOffset.UnixEpoch, "a", 0, 0, [new AdapterTraffic("a", 0, 0, 0, 0)]));
+        store.Save();
+
+        Assert.Empty(_fs.AtomicWrites);
+    }
+
+    [Fact]
+    public void Cap_CountsTrafficFromEveryAdapter()
+    {
+        var store = Create();
+        store.CapGb = 1;
+        var fired = new List<CapLevel>();
+        store.CapThresholdCrossed += fired.Add;
+
+        store.Add(new Sample(DateTimeOffset.UnixEpoch, "a", 0, 0,
+            [new AdapterTraffic("a", 0, Gb / 2, 0, 0), new AdapterTraffic("b", 0, Gb / 3, 0, 0)]));   // 83 % in total
+
+        Assert.Equal([CapLevel.Warning80], fired);
+    }
+
+    [Fact]
     public void Midnight_StartsNewBucket()
     {
         var store = Create();

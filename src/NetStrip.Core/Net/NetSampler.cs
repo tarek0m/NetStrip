@@ -79,14 +79,24 @@ public sealed class NetSampler(IInterfaceTable table, IClock clock, ILog log) : 
         {
             for (var i = 0; i < chosen.Count; i++)
             {
-                var c = chosen[i];
-                // A new adapter (no baseline) or a decreased counter contributes nothing this tick.
-                if (_previous.TryGetValue(c.Id, out var prev) && c.InOctets >= prev.InOctets && c.OutOctets >= prev.OutOctets)
+                if (TryDelta(chosen[i], out var u, out var d))
                 {
-                    down += c.InOctets - prev.InOctets;
-                    up += c.OutOctets - prev.OutOctets;
+                    up += u;
+                    down += d;
                 }
             }
+        }
+
+        // Every included adapter's bytes, for per-adapter usage. Bytes count even after a long gap (sleep): counters
+        // are cumulative, so the delta is exact; only the rates need a measurable interval.
+        var traffic = new List<AdapterTraffic>(counters.Count);
+        for (var i = 0; i < counters.Count; i++)
+        {
+            var c = counters[i];
+            if (!c.Included || !TryDelta(c, out var u, out var d)) continue;
+            traffic.Add(new AdapterTraffic(c.Id, (long)u, (long)d,
+                measurable ? (long)Math.Round(u / seconds) : 0,
+                measurable ? (long)Math.Round(d / seconds) : 0));
         }
 
         UpdateBaselines(counters);
@@ -98,7 +108,21 @@ public sealed class NetSampler(IInterfaceTable table, IClock clock, ILog log) : 
 
         return new Sample(clock.Now, adapterId,
             measurable ? (long)Math.Round(up / seconds) : 0,
-            measurable ? (long)Math.Round(down / seconds) : 0);
+            measurable ? (long)Math.Round(down / seconds) : 0,
+            traffic);
+    }
+
+    /// <summary>Bytes since the previous tick. False for a new adapter (no baseline) or a decreased counter (reset).</summary>
+    private bool TryDelta(InterfaceCounters c, out ulong up, out ulong down)
+    {
+        if (_previous.TryGetValue(c.Id, out var prev) && c.InOctets >= prev.InOctets && c.OutOctets >= prev.OutOctets)
+        {
+            down = c.InOctets - prev.InOctets;
+            up = c.OutOctets - prev.OutOctets;
+            return true;
+        }
+        up = down = 0;
+        return false;
     }
 
     /// <summary>One timer step: <see cref="Tick"/>, then raise <see cref="SampleProduced"/>.</summary>

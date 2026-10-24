@@ -7,7 +7,16 @@ namespace NetStrip.Core;
 public enum AdapterKind { Ethernet, WiFi, Cellular, Other }
 /// <param name="Connected">Link is up (operationally up and media connected). A disconnected adapter has no IPv4.</param>
 public sealed record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4, bool Connected = true);
-public sealed record Sample(DateTimeOffset Time, string AdapterId, long UpBytesPerSec, long DownBytesPerSec);
+/// <summary>One adapter's traffic over the tick that produced a sample: exact bytes, and its rate (0 when not measurable).</summary>
+public sealed record AdapterTraffic(string AdapterId, long UpBytes, long DownBytes, long UpBytesPerSec, long DownBytesPerSec);
+
+/// <summary>
+/// One tick. <paramref name="AdapterId"/> and the rates describe what is displayed (the configured adapter, the best
+/// route, or "all"). <paramref name="Traffic"/> lists every included adapter, so usage is recorded per adapter in
+/// exact bytes whatever is displayed; a sample without it counts as one second at its rate under its adapter id.
+/// </summary>
+public sealed record Sample(DateTimeOffset Time, string AdapterId, long UpBytesPerSec, long DownBytesPerSec,
+    IReadOnlyList<AdapterTraffic>? Traffic = null);
 public static class AdapterIds { public const string All = "all"; public const string Auto = "auto"; }
 
 public enum SpeedUnits { Bytes, Bits }
