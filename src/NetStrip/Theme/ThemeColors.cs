@@ -21,6 +21,12 @@ public sealed class ThemeColors : IDisposable
     private static readonly Color UploadDark = Color.FromRgb(0x4F, 0xD1, 0xC5);
     private static readonly Color ForegroundLight = Color.FromRgb(0x1B, 0x1B, 0x1B);
     private static readonly Color ForegroundDark = Colors.White;
+    // Data-cap tints for the strip's arrows: the Fluent caution/critical text colours (the flyout's cap bar uses the
+    // same SystemFillColorCaution/Critical pair), dark enough on a light taskbar and light enough on a dark one.
+    private static readonly Color CapWarningLight = Color.FromRgb(0x9D, 0x5D, 0x00);
+    private static readonly Color CapWarningDark = Color.FromRgb(0xFC, 0xE1, 0x00);
+    private static readonly Color CapCriticalLight = Color.FromRgb(0xC4, 0x2B, 0x1C);
+    private static readonly Color CapCriticalDark = Color.FromRgb(0xFF, 0x99, 0xA4);
 
     private HwndSource? _source;
 
@@ -33,6 +39,10 @@ public sealed class ThemeColors : IDisposable
     public Brush UploadBrush { get; private set; } = null!;
     public Brush DownloadBrush { get; private set; } = null!;
     public Brush TaskbarForeground { get; private set; } = null!;
+    /// <summary>Arrow tint once this cycle's usage reaches 80 % of the data cap (amber).</summary>
+    public Brush CapWarningBrush { get; private set; } = null!;
+    /// <summary>Arrow tint once this cycle's usage reaches the data cap (red).</summary>
+    public Brush CapCriticalBrush { get; private set; } = null!;
 
     public event Action? Changed;
 
@@ -63,6 +73,8 @@ public sealed class ThemeColors : IDisposable
         UploadBrush = Frozen(SystemUsesLightTheme ? UploadLight : UploadDark);
         DownloadBrush = Frozen(SystemParameters.WindowGlassColor);
         TaskbarForeground = Frozen(SystemUsesLightTheme ? ForegroundLight : ForegroundDark);
+        CapWarningBrush = Frozen(SystemUsesLightTheme ? CapWarningLight : CapWarningDark);
+        CapCriticalBrush = Frozen(SystemUsesLightTheme ? CapCriticalLight : CapCriticalDark);
     }
 
     private static bool ReadSystemUsesLightTheme()

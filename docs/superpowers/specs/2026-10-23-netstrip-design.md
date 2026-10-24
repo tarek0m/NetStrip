@@ -104,9 +104,10 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
 
 - Font: Segoe UI Variable Small (fallback Segoe UI), ~9 pt at 100 % DPI, tabular figures; right-aligned text so changing digits never shift layout.
 - Line 1: `↑ <upload>`; line 2: `↓ <download>`. Arrow glyphs tinted (upload soft teal `#2BB5A8` / dark-mode `#4FD1C5`; download = system accent). Numbers use taskbar foreground (white on dark, near-black on light).
+- Data cap: when a cap is set, every arrow glyph (all layouts) turns amber once this cycle reaches 80 % of the cap (`#9D5D00` light / `#FCE100` dark) and red at 100 % (`#C42B1C` light / `#FF99A4` dark), the same thresholds and Fluent caution/critical colours as the flyout's cap bar; normal tints below 80 % or with no cap. Colours follow the taskbar's light/dark theme like the others.
 - Formatting (`SpeedFormatter`): 3 significant digits, units KB/s, MB/s, GB/s (1024 base) or Kb/s, Mb/s, Gb/s (1000 base) per `units` setting (`bits` default | `bytes`). Values below 1 KB/s (or 1 Kb/s) show as `0 KB/s` / `0 Kb/s` to reduce noise; there is no B/s unit.
 - Idle fade: if both directions < 1 KB/s for 5 consecutive seconds, animate opacity to 0.45 over 200 ms; restore to 1.0 over 120 ms on activity.
-- Hover (600 ms delay): tooltip `Today ↓ 1.24 GB ↑ 210 MB`.
+- Hover (600 ms delay): tooltip `Today ↓ 1.24 GB ↑ 210 MB`, plus a second line `This cycle: 62% of 50.0 GB` when a cap is set (percentage rounded down, so it never reads 80 % or 100 % before the tint changes).
 - Left-click: toggle Flyout. Right-click: context menu — Settings, Pause speed display, Exit. Pausing freezes the strip and the flyout's live speeds and graph only; usage totals and the data cap keep counting.
 - Hidden while `FullscreenWatcher` reports fullscreen on that monitor.
 

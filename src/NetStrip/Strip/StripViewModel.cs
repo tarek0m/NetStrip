@@ -1,5 +1,6 @@
 using NetStrip.Core;
 using NetStrip.Core.Formatting;
+using NetStrip.Core.Presentation;
 
 namespace NetStrip.Strip;
 
@@ -18,6 +19,7 @@ internal sealed class StripViewModel
         Compact = 4,
         Tooltip = 8,
         Name = 16,
+        Cap = 32,
     }
 
     /// <summary>E.g. "1.20 MB/s".</summary>
@@ -31,7 +33,15 @@ internal sealed class StripViewModel
     public string Tooltip { get; private set; } = "";
     public string AccessibleName { get; private set; } = "";
 
-    public Changes Update(Sample s, Totals today, SpeedUnits units)
+    /// <summary>How far through the data cap this cycle is; drives the arrow tint.</summary>
+    public CapLevel CapLevel { get; private set; } = CapLevel.None;
+
+    // Inputs of the current Tooltip, so an unchanged tick (e.g. idle) does not format it again.
+    private Totals _tooltipToday = new(-1, -1);
+    private (long Used, long Cap)? _tooltipCap;
+
+    /// <param name="cap">This cycle's cap progress in bytes (<c>IUsageQuery.CapProgress</c>); null when no cap is set.</param>
+    public Changes Update(Sample s, Totals today, (long Used, long Cap)? cap, SpeedUnits units)
     {
         var up = SpeedFormatter.FormatSpeed(s.UpBytesPerSec, units);
         var down = SpeedFormatter.FormatSpeed(s.DownBytesPerSec, units);
@@ -53,8 +63,16 @@ internal sealed class StripViewModel
             }
         }
 
-        var tooltip = $"Today ↓ {SpeedFormatter.FormatTotal(today.DownBytes)} ↑ {SpeedFormatter.FormatTotal(today.UpBytes)}";
-        if (tooltip != Tooltip) { Tooltip = tooltip; changes |= Changes.Tooltip; }
+        if (today != _tooltipToday || cap != _tooltipCap)
+        {
+            _tooltipToday = today;
+            _tooltipCap = cap;
+            var tooltip = CapStatus.Tooltip(today, cap);
+            if (tooltip != Tooltip) { Tooltip = tooltip; changes |= Changes.Tooltip; }
+        }
+
+        var level = CapStatus.Level(cap);
+        if (level != CapLevel) { CapLevel = level; changes |= Changes.Cap; }
 
         if ((changes & (Changes.Up | Changes.Down)) != 0)
         {
