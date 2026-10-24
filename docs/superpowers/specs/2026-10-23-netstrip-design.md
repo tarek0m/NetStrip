@@ -71,7 +71,7 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
 - Corrupt file → rename to `usage.json.bad-<timestamp>`, start empty, log, and show a one-time notice in the flyout.
 - File that cannot be read (locked by antivirus/backup/sync; read retried briefly first) → leave it untouched, start empty, log; before the next save, read it again and merge it with this session's usage (or quarantine it if it turns out to be corrupt). Never save over a file that has not been read.
 - Monthly period: from `capResetDay` (1–28, default 1) of the current month to the day before the next reset.
-- Data cap (`capGb`, null = off) applies to the adapter scope set by `capAdapter` (`all` default, or an adapter id). Toast notifications (via `Microsoft.Toolkit.Uwp.Notifications` `ToastContentBuilder`, which supports unpackaged desktop apps on Win10/11) at 80 % and 100 %, each at most once per period.
+- Data cap (`capGb`, null = off) applies to the adapter scope set by `capAdapter` (`all` default, or an adapter id). Warnings at 80 % and 100 %, each at most once per period: a Windows notification titled "NetStrip" (`Shell_NotifyIcon` info balloon, which Win10/11 show as a regular notification under the exe's FileDescription; no WinRT) plus a one-time flyout notice with the same text in case the notification is missed. The notification owns a temporary notification-area icon that is removed when the balloon times out, is dismissed or clicked (clicking opens the flyout), or after a fallback delay (Windows' notification display time + 30 s, at least 1 min).
 - Queries: `Today(adapterScope)`, `ThisPeriod(adapterScope)`, `CapProgress()`.
 
 ## 6. TaskbarHost
@@ -119,7 +119,7 @@ record AdapterInfo(string Id, string Name, AdapterKind Kind, string? IPv4);   //
   2. **Graph:** last 60 samples; download as filled area (accent, 30 % fill), upload as 1.5 px line (teal); y-axis auto-scales to the max in window with a single max label. Custom-drawn `Polyline`/`Path`, no chart library.
   3. **Live:** current ↑ / ↓ in larger type.
   4. **Totals:** Today ↓/↑ and This cycle ↓/↑ (the data-cap cycle, starting on the "Cycle resets on day" setting); cap progress bar + "x of y GB" when a cap is set (bar turns warning color ≥ 80 %, critical ≥ 100 %).
-  5. **Footer:** settings gear; "New version available — vX.Y" link (opens release page in browser) when applicable; one-time notices (fallback mode, usage reset).
+  5. **Footer:** settings gear; "New version available — vX.Y" link (opens release page in browser) when applicable; one-time notices (fallback mode, usage reset, data cap warnings).
 
 ## 9. FullscreenWatcher
 

@@ -22,6 +22,7 @@ Run this checklist for every release (spec §13). Record the build version, date
 - [ ] Fullscreen video
 - [ ] Compact mode trigger
 - [ ] Fallback pill (simulate by blocking the taskbar attach)
+- [ ] Data cap warning (Settings: cap 0.001 GB, then some traffic): Windows notification titled NetStrip appears, clicking it opens the flyout with the same notice, and no NetStrip icon stays in the notification area
 
 ## Windows 10 22H2 (VM)
 
@@ -29,6 +30,7 @@ Run this checklist for every release (spec §13). Record the build version, date
 - [ ] Top taskbar
 - [ ] Left or right (side) taskbar
 - [ ] Small taskbar buttons
+- [ ] Data cap warning notification (as on Windows 11)
 
 ## Power and network
 
