@@ -24,3 +24,10 @@ jobs:
 
       - name: Test
         run: dotnet test -c Release
+
+      # Starts the real app (WPF + Win32 layers, which the unit tests don't cover) with simulated traffic and has it
+      # exit by itself; fails on a hang, a non-zero exit code, or an ERROR line in its log. See the script for details.
+      - name: Launch smoke test
+        shell: pwsh
+        timeout-minutes: 5
+        run: ./tools/Test-LaunchSmoke.ps1 -ExitAfter 20 -TimeoutSeconds 120
