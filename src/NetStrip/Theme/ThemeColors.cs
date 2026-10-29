@@ -19,6 +19,8 @@ public sealed class ThemeColors : IDisposable
 
     private static readonly Color UploadLight = Color.FromRgb(0x2B, 0xB5, 0xA8);
     private static readonly Color UploadDark = Color.FromRgb(0x4F, 0xD1, 0xC5);
+    private static readonly Color DownloadLight = Color.FromRgb(0x25, 0x63, 0xEB);
+    private static readonly Color DownloadDark = Color.FromRgb(0x60, 0xA5, 0xFA);
     private static readonly Color ForegroundLight = Color.FromRgb(0x1B, 0x1B, 0x1B);
     private static readonly Color ForegroundDark = Colors.White;
     // Data-cap tints for the strip's arrows: the Fluent caution/critical text colours (the flyout's cap bar uses the
@@ -71,7 +73,7 @@ public sealed class ThemeColors : IDisposable
     {
         SystemUsesLightTheme = ReadSystemUsesLightTheme();
         UploadBrush = Frozen(SystemUsesLightTheme ? UploadLight : UploadDark);
-        DownloadBrush = Frozen(SystemParameters.WindowGlassColor);
+        DownloadBrush = Frozen(SystemUsesLightTheme ? DownloadLight : DownloadDark);
         TaskbarForeground = Frozen(SystemUsesLightTheme ? ForegroundLight : ForegroundDark);
         CapWarningBrush = Frozen(SystemUsesLightTheme ? CapWarningLight : CapWarningDark);
         CapCriticalBrush = Frozen(SystemUsesLightTheme ? CapCriticalLight : CapCriticalDark);
